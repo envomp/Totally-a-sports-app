@@ -7,8 +7,9 @@
 
     <Button
         android:id="@+id/position"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_width="130dp"
+        android:layout_height="0dp"
+        android:drawableLeft="@drawable/ic_gps_fixed_black_24dp"
         android:text="north-up"
         app:layout_constraintBottom_toTopOf="@+id/reset"
         app:layout_constraintStart_toStartOf="parent"
@@ -16,8 +17,9 @@
 
     <Button
         android:id="@+id/reset"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_width="130dp"
+        android:layout_height="0dp"
+        android:drawableLeft="@drawable/ic_delete_forever_black_24dp"
         android:text="reset"
         app:layout_constraintBottom_toTopOf="@+id/compass"
         app:layout_constraintStart_toStartOf="parent"
@@ -25,8 +27,9 @@
 
     <Button
         android:id="@+id/compass"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_width="130dp"
+        android:layout_height="0dp"
+        android:drawableLeft="@drawable/compass"
         android:text="compass"
         app:layout_constraintBottom_toTopOf="@+id/options"
         app:layout_constraintStart_toStartOf="parent"
@@ -34,8 +37,9 @@
 
     <Button
         android:id="@+id/options"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_width="130dp"
+        android:layout_height="0dp"
+        android:drawableLeft="@drawable/ic_settings_black_24dp"
         android:text="Options"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"

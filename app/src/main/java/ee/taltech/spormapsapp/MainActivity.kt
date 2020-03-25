@@ -2,7 +2,6 @@ package ee.taltech.spormapsapp
 
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.drawable.Drawable
 import android.hardware.Sensor
@@ -94,14 +93,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             getMapAsync {
                 map = it
                 MapsInitializer.initialize(applicationContext)
-                setMapLocation(it)
+//                map.isMyLocationEnabled = true
+                map.uiSettings.isMyLocationButtonEnabled = true
+                mapActions(it)
 
                 // create bounds that encompass every location we reference
-
-                with(map) {
-
-//                    moveCamera(CameraUpdateFactory)
-                }
 
                 addMarkersToMap()
             }
@@ -142,7 +138,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     }
 
-    private fun setMapLocation(map: GoogleMap) {
+    private fun mapActions(map: GoogleMap) {
         with(map) {
 //            moveCamera(CameraUpdateFactory.newLatLngZoom(position, 13f))
 
@@ -190,40 +186,40 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     private fun wireGameButtons() {
-        findViewById<Button>(R.id.start_or_stop).setBackgroundColor(resources.getColor(R.color.colorOrange))
+        findViewById<Button>(R.id.start_or_stop).setBackgroundColor(resources.getColor(R.color.colorGreen))
         findViewById<Button>(R.id.start_or_stop).setOnClickListener {
             started = !started
             setColorsAndTexts()
             gameLoop()
         }
 
-        findViewById<Button>(R.id.add_wp).setBackgroundColor(resources.getColor(R.color.colorOrange))
+        findViewById<Button>(R.id.add_wp).setBackgroundColor(resources.getColor(R.color.colorGreen))
         findViewById<Button>(R.id.add_wp).setOnClickListener {
             add_WP = !add_WP
             add_CP = false
             setColorsAndTexts()
         }
 
-        findViewById<Button>(R.id.add_cp).setBackgroundColor(resources.getColor(R.color.colorOrange))
+        findViewById<Button>(R.id.add_cp).setBackgroundColor(resources.getColor(R.color.colorGreen))
         findViewById<Button>(R.id.add_cp).setOnClickListener {
             add_CP = !add_CP
             add_WP = false
             setColorsAndTexts()
         }
 
-        findViewById<Button>(R.id.options).setBackgroundColor(resources.getColor(R.color.colorOrange))
+        findViewById<Button>(R.id.options).setBackgroundColor(resources.getColor(R.color.colorGreen))
         findViewById<Button>(R.id.options).setOnClickListener {
             is_options_toggeled = !is_options_toggeled
             setColorsAndTexts()
         }
 
-        findViewById<Button>(R.id.compass).setBackgroundColor(resources.getColor(R.color.colorOrange))
+        findViewById<Button>(R.id.compass).setBackgroundColor(resources.getColor(R.color.colorGreen))
         findViewById<Button>(R.id.compass).setOnClickListener {
             is_compass_toggeled = !is_compass_toggeled
             setColorsAndTexts()
         }
 
-        findViewById<Button>(R.id.reset).setBackgroundColor(resources.getColor(R.color.colorOrange))
+        findViewById<Button>(R.id.reset).setBackgroundColor(resources.getColor(R.color.colorGreen))
         findViewById<Button>(R.id.reset).setOnClickListener {
             // RESET EVERYTHING
             map.clear()
@@ -231,25 +227,25 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             CPs = mutableListOf()
             setColorsAndTexts()
 
-            findViewById<Button>(R.id.reset).setBackgroundColor(resources.getColor(R.color.colorOrangeActive))
+            findViewById<Button>(R.id.reset).setBackgroundColor(resources.getColor(R.color.colorGreener))
             Handler().postDelayed(
                 {
-                    findViewById<Button>(R.id.reset).setBackgroundColor(resources.getColor(R.color.colorOrange))
+                    findViewById<Button>(R.id.reset).setBackgroundColor(resources.getColor(R.color.colorGreen))
                 },
                 100 // value in milliseconds
             )
         }
 
-        findViewById<Button>(R.id.position).setBackgroundColor(resources.getColor(R.color.colorOrange))
+        findViewById<Button>(R.id.position).setBackgroundColor(resources.getColor(R.color.colorGreen))
         findViewById<Button>(R.id.position).setOnClickListener {
             direction += 1
             direction %= 4
 
             findViewById<Button>(R.id.position).text = direction_map[direction]
-            findViewById<Button>(R.id.position).setBackgroundColor(resources.getColor(R.color.colorOrangeActive))
+            findViewById<Button>(R.id.position).setBackgroundColor(resources.getColor(R.color.colorGreener))
             Handler().postDelayed(
                 {
-                    findViewById<Button>(R.id.position).setBackgroundColor(resources.getColor(R.color.colorOrange))
+                    findViewById<Button>(R.id.position).setBackgroundColor(resources.getColor(R.color.colorGreen))
                 },
                 100 // value in milliseconds
             )
@@ -266,6 +262,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
                     updateVisibleText()
                     gameLoop()
+                    mapTransformations()
                 }
 
             },
@@ -273,13 +270,17 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         )
     }
 
+    private fun mapTransformations() {
+
+    }
+
     private fun setColorsAndTexts() {
         findViewById<Button>(R.id.start_or_stop).text = if (started) "STOP" else "START"
-        findViewById<Button>(R.id.start_or_stop).setBackgroundColor(resources.getColor(if (started) R.color.colorOrangeActive else R.color.colorOrange))
-        findViewById<Button>(R.id.add_wp).setBackgroundColor(resources.getColor(if (add_WP) R.color.colorOrangeActive else R.color.colorOrange))
-        findViewById<Button>(R.id.add_cp).setBackgroundColor(resources.getColor(if (add_CP) R.color.colorOrangeActive else R.color.colorOrange))
-        findViewById<Button>(R.id.options).setBackgroundColor(resources.getColor(if (is_options_toggeled) R.color.colorOrangeActive else R.color.colorOrange))
-        findViewById<Button>(R.id.compass).setBackgroundColor(resources.getColor(if (is_compass_toggeled) R.color.colorOrangeActive else R.color.colorOrange))
+        findViewById<Button>(R.id.start_or_stop).setBackgroundColor(resources.getColor(if (started) R.color.colorGreener else R.color.colorGreen))
+        findViewById<Button>(R.id.add_wp).setBackgroundColor(resources.getColor(if (add_WP) R.color.colorGreener else R.color.colorGreen))
+        findViewById<Button>(R.id.add_cp).setBackgroundColor(resources.getColor(if (add_CP) R.color.colorGreener else R.color.colorGreen))
+        findViewById<Button>(R.id.options).setBackgroundColor(resources.getColor(if (is_options_toggeled) R.color.colorGreener else R.color.colorGreen))
+        findViewById<Button>(R.id.compass).setBackgroundColor(resources.getColor(if (is_compass_toggeled) R.color.colorGreener else R.color.colorGreen))
         if (is_compass_toggeled) {
             findViewById<ImageView>(R.id.imageViewCompass).visibility = View.VISIBLE
         } else {

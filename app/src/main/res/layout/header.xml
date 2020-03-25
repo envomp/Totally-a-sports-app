@@ -7,8 +7,9 @@
 
     <Button
         android:id="@+id/position"
-        android:layout_width="wrap_content"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:drawableLeft="@drawable/ic_gps_fixed_black_24dp"
         android:text="north-up"
         app:layout_constraintEnd_toStartOf="@+id/reset"
         app:layout_constraintHorizontal_bias="0.5"
@@ -17,31 +18,34 @@
 
     <Button
         android:id="@+id/reset"
-        android:layout_width="wrap_content"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:drawableLeft="@drawable/ic_delete_forever_black_24dp"
         android:text="reset"
-        app:layout_constraintEnd_toStartOf="@+id/compass"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.5"
         app:layout_constraintStart_toEndOf="@+id/position"
         app:layout_constraintTop_toTopOf="parent" />
 
     <Button
         android:id="@+id/compass"
-        android:layout_width="wrap_content"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:drawableLeft="@drawable/compass"
         android:text="compass"
         app:layout_constraintEnd_toStartOf="@+id/options"
         app:layout_constraintHorizontal_bias="0.5"
-        app:layout_constraintStart_toEndOf="@+id/reset"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/position" />
 
     <Button
         android:id="@+id/options"
-        android:layout_width="wrap_content"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:drawableLeft="@drawable/ic_settings_black_24dp"
         android:text="Options"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.5"
         app:layout_constraintStart_toEndOf="@+id/compass"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toBottomOf="@+id/reset" />
 </androidx.constraintlayout.widget.ConstraintLayout>
