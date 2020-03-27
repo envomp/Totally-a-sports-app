@@ -3,20 +3,9 @@ package ee.taltech.spormapsapp
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.net.Uri
-import android.os.Build
-import android.os.Bundle
-import android.provider.Settings
-import android.util.Log
-import android.view.View
-import android.widget.Toast
-import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.drawable.Drawable
@@ -27,21 +16,38 @@ import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.hardware.SensorManager.SENSOR_DELAY_GAME
+import android.location.Location
+import android.net.Uri
+import android.os.Build
+import android.os.Bundle
 import android.os.Handler
+import android.provider.Settings
+import android.util.Log
+import android.view.View
 import android.view.animation.Animation.RELATIVE_TO_SELF
 import android.view.animation.RotateAnimation
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.annotation.DrawableRes
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
 import androidx.core.content.res.ResourcesCompat
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.google.android.gms.maps.CameraUpdate
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.MapsInitializer
 import com.google.android.gms.maps.model.*
 import com.google.android.material.snackbar.Snackbar
+import ee.taltech.spormapsapp.StateVariables.CP_distance_overall
+import ee.taltech.spormapsapp.StateVariables.WP_distance_overall
+import ee.taltech.spormapsapp.StateVariables.add_CP
+import ee.taltech.spormapsapp.StateVariables.add_WP
+import ee.taltech.spormapsapp.StateVariables.locationCP
+import ee.taltech.spormapsapp.StateVariables.locationWP
+import ee.taltech.spormapsapp.StateVariables.overall_distance_covered
+import ee.taltech.spormapsapp.StateVariables.session_duration
 import kotlinx.android.synthetic.main.map.*
 import java.lang.Math.toDegrees
 import kotlin.math.round
@@ -58,8 +64,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     // async
     private var locationServiceActive = false
-    private val broadcastReceiver = InnerBroadcastReceiver()
-    private val broadcastReceiverIntentFilter: IntentFilter = IntentFilter()
 
     // sensors
     lateinit var sensorManager: SensorManager
@@ -75,8 +79,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     var lastMagnetometerSet = false
 
     // Header
-    private var userLatitude = 0.0;
-    private var userLongitude = 0.0;
     private var direction = 0
     private val direction_map: HashMap<Int, String> =
         hashMapOf(0 to "CENTERED", 1 to "NORTH-UP", 2 to "DIRECTION-UP", 3 to "CHOSEN-UP")
@@ -86,8 +88,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // Dynamic modifiers
     private var hasPermissions = false
     private var started = false
-    private var add_WP = false
-    private var add_CP = false
 
     // map
     private lateinit var map: GoogleMap
@@ -106,8 +106,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         } else {
             hasPermissions = true
         }
-
-        broadcastReceiverIntentFilter.addAction(C.LOCATION_UPDATE_ACTION)
 
         with(mapView) {
             // Initialise the MapView
@@ -167,69 +165,88 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             mapType = GoogleMap.MAP_TYPE_TERRAIN
             setOnMapClickListener {
                 if (add_CP) {
-
-                    CP?.remove()
-                    CP = addMarker(
-                        MarkerOptions().position(LatLng(userLatitude, userLongitude))
-                            .title(String.format("Capture point"))
-                            .draggable(true)
-                            .icon(vectorToBitmap(R.drawable.capturepoint, 100, 150))
-                    )
-
-                    Toast.makeText(
-                        this@MainActivity,
-                        String.format("Added a capture point"),
-                        Toast.LENGTH_SHORT
-                    )
-                        .show()
-                    add_CP = false
-
-                } else if (add_WP) {
-
-                    WP?.remove()
-
-                    WP = addMarker(
-                        MarkerOptions().position(LatLng(it.latitude, it.longitude))
-                            .title("Way point")
-                            .draggable(true)
-                            .icon(vectorToBitmap(R.drawable.waypoint, 100, 150))
-                    )
-
-                    Toast.makeText(this@MainActivity, "Added a way point", Toast.LENGTH_SHORT)
-                        .show()
-                    add_WP = false
-
+                    locationCP = map.myLocation
+                    addCheckPoint()
                 }
+                if (add_WP) {
+                    val location = map.myLocation
+                    location.latitude = it.latitude
+                    location.longitude = it.longitude
 
+                    locationWP = location
+                    addWayPoint()
+                }
                 setColorsAndTexts()
             }
 
             map.setOnMyLocationChangeListener { location ->
+                mapTransformation(location, map)
+            }
+        }
+    }
 
-                when (direction) {
-                    0 -> {
-                        // case CENTERED
-                        //                map.animateCamera(CameraUpdateFactory.newLatLngZoom(, 16f));
-                        val center: CameraUpdate = CameraUpdateFactory.newLatLng(
-                            LatLng(
-                                location.latitude,
-                                location.longitude
-                            )
-                        )
-                        val zoom: CameraUpdate = CameraUpdateFactory.zoomTo(20f)
-                        map.moveCamera(center)
-                        map.animateCamera(zoom)
-                    }
-                    1 -> {
-                        // case NORTH-UP
-                    }
-                    2 -> {
-                        // case DIRECTION-UP
-                    }
-                    3 -> {
-                        // case CHOSEN-UP
-                    }
-                }
+    private fun GoogleMap.addWayPoint() {
+        if (add_WP && locationWP != null) {
+            WP?.remove()
+            WP = addMarker(
+                MarkerOptions().position(LatLng(locationWP!!.latitude, locationWP!!.longitude))
+                    .title("Way point")
+                    .draggable(true)
+                    .icon(vectorToBitmap(R.drawable.waypoint, 100, 150))
+            )
+
+            Toast.makeText(this@MainActivity, "Added a way point", Toast.LENGTH_SHORT)
+                .show()
+            add_WP = false
+        }
+    }
+
+    private fun GoogleMap.addCheckPoint() {
+        if (add_CP && locationCP != null) {
+            CP?.remove()
+            CP = addMarker(
+                MarkerOptions().position(LatLng(locationCP!!.latitude, locationCP!!.longitude))
+                    .title(String.format("Capture point"))
+                    .draggable(true)
+                    .icon(vectorToBitmap(R.drawable.capturepoint, 100, 150))
+            )
+
+            Toast.makeText(
+                this@MainActivity,
+                String.format("Added a capture point"),
+                Toast.LENGTH_SHORT
+            )
+                .show()
+            add_CP = false
+        }
+    }
+
+    private fun mapTransformation(
+        location: Location,
+        map: GoogleMap
+    ) {
+        when (direction) {
+            0 -> {
+                // case CENTERED
+                //                map.animateCamera(CameraUpdateFactory.newLatLngZoom(, 16f));
+                val center: CameraUpdate = CameraUpdateFactory.newLatLng(
+                    LatLng(
+                        location.latitude,
+                        location.longitude
+                    )
+                )
+                val zoom: CameraUpdate = CameraUpdateFactory.zoomTo(20f)
+                map.moveCamera(center)
+                map.animateCamera(zoom)
+            }
+            1 -> {
+                // case NORTH-UP
+            }
+            2 -> {
+                // case DIRECTION-UP
+            }
+            3 -> {
+                // case CHOSEN-UP
             }
         }
     }
@@ -322,32 +339,23 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
                 val lastUID = stateUID
                 if (started && lastUID == stateUID) {
-                    headerValues.session_duration += 1
+                    session_duration += 1
                     updateVisibleText()
+
+                    if (add_CP) {
+                        map.addCheckPoint()
+                    }
+
+                    if (add_WP) {
+                        map.addWayPoint()
+                    }
+
                     gameLoop()
                 }
 
             },
             1000 // value in milliseconds
         )
-    }
-
-    private fun mapTransformations() {
-        when (direction) {
-            0 -> {
-                // case CENTERED
-//                map.animateCamera(CameraUpdateFactory.newLatLngZoom(, 16f));
-            }
-            1 -> {
-                // case NORTH-UP
-            }
-            2 -> {
-                // case DIRECTION-UP
-            }
-            3 -> {
-                // case CHOSEN-UP
-            }
-        }
     }
 
     private fun setColorsAndTexts() {
@@ -368,28 +376,29 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private fun updateVisibleText() {
 
         fillColumn(
-            headerValues.session_duration,
-            headerValues.overall_distance_covered,
+            session_duration,
+            overall_distance_covered,
             R.id.col1,
             String.format(
-                "%s:%s:%s", (headerValues.session_duration.toInt() / 3600).toString().padStart(2, '0'),
-                ((headerValues.session_duration.toInt() / 60) % 60).toString().padStart(2, '0'),
-                (headerValues.session_duration.toInt() % 60).toString().padStart(2, '0')
+                "%s:%s:%s",
+                (session_duration.toInt() / 3600).toString().padStart(2, '0'),
+                ((session_duration.toInt() / 60) % 60).toString().padStart(2, '0'),
+                (session_duration.toInt() % 60).toString().padStart(2, '0')
             )
         )
 
         fillColumn(
-            headerValues.session_duration,
-            headerValues.CP_distance_overall,
+            session_duration,
+            CP_distance_overall,
             R.id.col2,
-            ((headerValues.CP_distance_overall * 10).toInt().toDouble() / 10).toString()
+            ((CP_distance_overall * 10).toInt().toDouble() / 10).toString()
         )
 
         fillColumn(
-            headerValues.session_duration,
-            headerValues.WP_distance_overall,
+            session_duration,
+            WP_distance_overall,
             R.id.col3,
-            ((headerValues.WP_distance_overall * 10).toInt().toDouble() / 10).toString()
+            ((WP_distance_overall * 10).toInt().toDouble() / 10).toString()
         )
 
     }
@@ -430,8 +439,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     override fun onResume() {
         super.onResume()
         mapView.onResume()
-        LocalBroadcastManager.getInstance(this)
-            .registerReceiver(broadcastReceiver, broadcastReceiverIntentFilter)
         sensorManager.registerListener(this, accelerometer, SENSOR_DELAY_GAME)
         sensorManager.registerListener(this, magnetometer, SENSOR_DELAY_GAME)
         Log.d(TAG, "lifecycle onResume")
@@ -446,7 +453,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     override fun onStop() {
         super.onStop()
         mapView.onStop()
-        LocalBroadcastManager.getInstance(this).unregisterReceiver(broadcastReceiver)
         sensorManager.unregisterListener(this, accelerometer)
         sensorManager.unregisterListener(this, magnetometer)
         Log.d(TAG, "lifecycle onStop")
@@ -655,30 +661,4 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
 
     }
-
-    fun buttonWPOnClick(view: View) {
-        Log.d(TAG, "buttonWPOnClick")
-        sendBroadcast(Intent(C.NOTIFICATION_ACTION_WP))
-    }
-
-    fun buttonCPOnClick(view: View) {
-        Log.d(TAG, "buttonCPOnClick")
-        sendBroadcast(Intent(C.NOTIFICATION_ACTION_CP))
-    }
-
-    private inner class InnerBroadcastReceiver : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            Log.d(TAG, intent!!.action)
-            when (intent.action) {
-                C.LOCATION_UPDATE_ACTION -> {
-                    userLatitude =
-                        intent.getDoubleExtra(C.LOCATION_UPDATE_ACTION_LATITUDE, 0.0)
-                    userLongitude =
-                        intent.getDoubleExtra(C.LOCATION_UPDATE_ACTION_LONGITUDE, 0.0)
-                }
-            }
-        }
-
-    }
-
 }

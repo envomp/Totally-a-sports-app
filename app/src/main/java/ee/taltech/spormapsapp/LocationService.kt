@@ -15,6 +15,22 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.google.android.gms.location.*
+import ee.taltech.spormapsapp.StateVariables.CP_average_speed
+import ee.taltech.spormapsapp.StateVariables.CP_distance_line
+import ee.taltech.spormapsapp.StateVariables.CP_distance_overall
+import ee.taltech.spormapsapp.StateVariables.WP_average_speed
+import ee.taltech.spormapsapp.StateVariables.WP_distance_line
+import ee.taltech.spormapsapp.StateVariables.WP_distance_overall
+import ee.taltech.spormapsapp.StateVariables.add_CP
+import ee.taltech.spormapsapp.StateVariables.add_WP
+import ee.taltech.spormapsapp.StateVariables.currentLocation
+import ee.taltech.spormapsapp.StateVariables.line_distance_covered
+import ee.taltech.spormapsapp.StateVariables.locationCP
+import ee.taltech.spormapsapp.StateVariables.locationStart
+import ee.taltech.spormapsapp.StateVariables.locationWP
+import ee.taltech.spormapsapp.StateVariables.overall_average_speed
+import ee.taltech.spormapsapp.StateVariables.overall_distance_covered
+import ee.taltech.spormapsapp.StateVariables.session_duration
 import kotlin.math.roundToInt
 
 
@@ -36,17 +52,7 @@ class LocationService : Service() {
     private var mLocationCallback: LocationCallback? = null
 
     // headers
-    private val headerValues : StateVariables = StateVariables
-
-    // last received location
-    private var currentLocation: Location? = null
-
-    // other locations
-    private var locationStart: Location? = null
-    private var locationCP: Location? = null
-    private var locationWP: Location? = null
-
-
+    private val headerValues: StateVariables = StateVariables
 
     override fun onCreate() {
         Log.d(TAG, "onCreate")
@@ -55,11 +61,7 @@ class LocationService : Service() {
         broadcastReceiverIntentFilter.addAction(C.NOTIFICATION_ACTION_CP)
         broadcastReceiverIntentFilter.addAction(C.NOTIFICATION_ACTION_WP)
         broadcastReceiverIntentFilter.addAction(C.LOCATION_UPDATE_ACTION)
-
-
         registerReceiver(broadcastReceiver, broadcastReceiverIntentFilter)
-
-
         mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
         mLocationCallback = object : LocationCallback() {
@@ -94,19 +96,19 @@ class LocationService : Service() {
 
     private fun onNewLocation(location: Location) {
         Log.i(TAG, "New location: $location")
-        if (currentLocation == null){
+        if (currentLocation == null) {
             locationStart = location
             locationCP = location
             locationWP = location
         } else {
-            headerValues.line_distance_covered = location.distanceTo(locationStart)
-            headerValues.overall_distance_covered += location.distanceTo(currentLocation)
+            line_distance_covered = location.distanceTo(locationStart)
+            overall_distance_covered += location.distanceTo(currentLocation)
 
-            headerValues.CP_distance_line = location.distanceTo(locationCP)
-            headerValues.CP_distance_overall += location.distanceTo(currentLocation)
+            CP_distance_line = location.distanceTo(locationCP)
+            CP_distance_overall += location.distanceTo(currentLocation)
 
-            headerValues.WP_distance_line = location.distanceTo(locationWP)
-            headerValues.WP_distance_overall += location.distanceTo(currentLocation)
+            WP_distance_line = location.distanceTo(locationWP)
+            WP_distance_overall += location.distanceTo(currentLocation)
         }
         // save the location for calculations
         currentLocation = location
@@ -122,25 +124,27 @@ class LocationService : Service() {
     }
 
     private fun createLocationRequest() {
-        mLocationRequest.setInterval(UPDATE_INTERVAL_IN_MILLISECONDS)
-        mLocationRequest.setFastestInterval(FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS)
-        mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY)
-        mLocationRequest.setMaxWaitTime(UPDATE_INTERVAL_IN_MILLISECONDS)
+        mLocationRequest.interval = UPDATE_INTERVAL_IN_MILLISECONDS
+        mLocationRequest.fastestInterval = FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS
+        mLocationRequest.priority = LocationRequest.PRIORITY_HIGH_ACCURACY
+        mLocationRequest.maxWaitTime = UPDATE_INTERVAL_IN_MILLISECONDS
     }
 
 
     private fun getLastLocation() {
         try {
             mFusedLocationClient.lastLocation
-                .addOnCompleteListener { task -> if (task.isSuccessful) {
-                    Log.w(TAG, "task successfull");
-                    if (task.result != null){
-                        onNewLocation(task.result!!)
-                    }
-                } else {
+                .addOnCompleteListener { task ->
+                    if (task.isSuccessful) {
+                        Log.w(TAG, "task successfull")
+                        if (task.result != null) {
+                            onNewLocation(task.result!!)
+                        }
+                    } else {
 
-                    Log.w(TAG, "Failed to get location." + task.exception)
-                }}
+                        Log.w(TAG, "Failed to get location." + task.exception)
+                    }
+                }
         } catch (unlikely: SecurityException) {
             Log.e(TAG, "Lost location permission.$unlikely")
         }
@@ -182,12 +186,12 @@ class LocationService : Service() {
         locationCP = null
         locationWP = null
 
-        headerValues.line_distance_covered = 0f
-        headerValues.overall_distance_covered = 0f
-        headerValues.CP_distance_line = 0f
-        headerValues.CP_distance_overall = 0f
-        headerValues.WP_distance_line = 0f
-        headerValues.WP_distance_overall = 0f
+        line_distance_covered = 0f
+        overall_distance_covered = 0f
+        CP_distance_line = 0f
+        CP_distance_overall = 0f
+        WP_distance_line = 0f
+        WP_distance_overall = 0f
 
 
         showNotification()
@@ -224,36 +228,37 @@ class LocationService : Service() {
         notifyview.setOnClickPendingIntent(R.id.imageButtonCP, pendingIntentCp)
         notifyview.setOnClickPendingIntent(R.id.imageButtonWP, pendingIntentWp)
 
-        headerValues.overall_average_speed = fillColumn(
+        overall_average_speed = fillColumn(
             notifyview,
-            headerValues.session_duration,
-            headerValues.overall_distance_covered,
+            session_duration,
+            overall_distance_covered,
             R.id.col4,
             String.format(
-                "%s:%s:%s", (headerValues.session_duration.toInt() / 3600).toString().padStart(2, '0'),
-                ((headerValues.session_duration.toInt() / 60) % 60).toString().padStart(2, '0'),
-                (headerValues.session_duration.toInt() % 60).toString().padStart(2, '0')
+                "%s:%s:%s",
+                (session_duration.toInt() / 3600).toString().padStart(2, '0'),
+                ((session_duration.toInt() / 60) % 60).toString().padStart(2, '0'),
+                (session_duration.toInt() % 60).toString().padStart(2, '0')
             )
         )
 
-        headerValues.CP_average_speed =fillColumn(
+        CP_average_speed = fillColumn(
             notifyview,
-            headerValues.session_duration,
-            headerValues.CP_distance_overall,
+            session_duration,
+            CP_distance_overall,
             R.id.col5,
-            ((headerValues.CP_distance_line * 10).toInt().toDouble() / 10).toString()
+            ((CP_distance_line * 10).toInt().toDouble() / 10).toString()
         )
 
-        headerValues.WP_average_speed = fillColumn(
+        WP_average_speed = fillColumn(
             notifyview,
-            headerValues.session_duration,
-            headerValues.WP_distance_overall,
+            session_duration,
+            WP_distance_overall,
             R.id.col6,
-            ((headerValues.WP_distance_line * 10).toInt().toDouble() / 10).toString()
+            ((WP_distance_line * 10).toInt().toDouble() / 10).toString()
         )
 
         // construct and show notification
-        var builder = NotificationCompat.Builder(applicationContext, C.NOTIFICATION_CHANNEL)
+        val builder = NotificationCompat.Builder(applicationContext, C.NOTIFICATION_CHANNEL)
             .setSmallIcon(R.drawable.common_google_signin_btn_icon_dark)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
@@ -275,8 +280,8 @@ class LocationService : Service() {
         row2: String
     ): Double {
 
-        var duration = sessionDuration.toInt()
-        var covered = overallDistanceCovered.toInt()
+        val duration = sessionDuration.toInt()
+        val covered = overallDistanceCovered.toInt()
         var averageSpeed = 0.0
         if (covered != 0) {
             averageSpeed =
@@ -297,21 +302,27 @@ class LocationService : Service() {
     }
 
 
-    private inner class InnerBroadcastReceiver: BroadcastReceiver() {
+    private inner class InnerBroadcastReceiver : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             Log.d(TAG, intent!!.action)
-            when(intent!!.action){
+            when (intent.action) {
                 C.NOTIFICATION_ACTION_WP -> {
-                    locationWP = currentLocation
-                    headerValues.WP_distance_line = 0f
-                    headerValues.WP_distance_overall = 0f
-                    showNotification()
+                    if (!add_WP) {
+                        locationWP = currentLocation
+                        add_WP = true
+                        WP_distance_line = 0f
+                        WP_distance_overall = 0f
+                        showNotification()
+                    }
                 }
                 C.NOTIFICATION_ACTION_CP -> {
-                    locationCP = currentLocation
-                    headerValues.CP_distance_line = 0f
-                    headerValues.CP_distance_overall = 0f
-                    showNotification()
+                    if (!add_CP) {
+                        locationCP = currentLocation
+                        add_CP = true
+                        CP_distance_line = 0f
+                        CP_distance_overall = 0f
+                        showNotification()
+                    }
                 }
             }
         }
