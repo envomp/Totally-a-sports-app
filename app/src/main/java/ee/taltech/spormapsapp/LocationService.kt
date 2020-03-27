@@ -15,13 +15,14 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.google.android.gms.location.*
+import kotlin.math.roundToInt
 
 
 class LocationService : Service() {
+
     companion object {
         private val TAG = this::class.java.declaringClass!!.simpleName
     }
-
 
     // The desired intervals for location updates. Inexact. Updates may be more or less frequent.
     private val UPDATE_INTERVAL_IN_MILLISECONDS: Long = 2000
@@ -34,19 +35,15 @@ class LocationService : Service() {
     private lateinit var mFusedLocationClient: FusedLocationProviderClient
     private var mLocationCallback: LocationCallback? = null
 
+    // headers
+    private val headerValues : StateVariables = StateVariables
+
     // last received location
     private var currentLocation: Location? = null
 
-    private var distanceOverallDirect = 0f
-    private var distanceOverallTotal = 0f
+    // other locations
     private var locationStart: Location? = null
-
-    private var distanceCPDirect = 0f
-    private var distanceCPTotal = 0f
     private var locationCP: Location? = null
-
-    private var distanceWPDirect = 0f
-    private var distanceWPTotal = 0f
     private var locationWP: Location? = null
 
 
@@ -102,14 +99,14 @@ class LocationService : Service() {
             locationCP = location
             locationWP = location
         } else {
-            distanceOverallDirect = location.distanceTo(locationStart)
-            distanceOverallTotal += location.distanceTo(currentLocation)
+            headerValues.line_distance_covered = location.distanceTo(locationStart)
+            headerValues.overall_distance_covered += location.distanceTo(currentLocation)
 
-            distanceCPDirect = location.distanceTo(locationCP)
-            distanceCPTotal += location.distanceTo(currentLocation)
+            headerValues.CP_distance_line = location.distanceTo(locationCP)
+            headerValues.CP_distance_overall += location.distanceTo(currentLocation)
 
-            distanceWPDirect = location.distanceTo(locationWP)
-            distanceWPTotal += location.distanceTo(currentLocation)
+            headerValues.WP_distance_line = location.distanceTo(locationWP)
+            headerValues.WP_distance_overall += location.distanceTo(currentLocation)
         }
         // save the location for calculations
         currentLocation = location
@@ -185,12 +182,12 @@ class LocationService : Service() {
         locationCP = null
         locationWP = null
 
-        distanceOverallDirect = 0f
-        distanceOverallTotal = 0f
-        distanceCPDirect = 0f
-        distanceCPTotal = 0f
-        distanceWPDirect = 0f
-        distanceWPTotal = 0f
+        headerValues.line_distance_covered = 0f
+        headerValues.overall_distance_covered = 0f
+        headerValues.CP_distance_line = 0f
+        headerValues.CP_distance_overall = 0f
+        headerValues.WP_distance_line = 0f
+        headerValues.WP_distance_overall = 0f
 
 
         showNotification()
@@ -215,27 +212,45 @@ class LocationService : Service() {
 
     }
 
-    fun showNotification(){
+    fun showNotification() {
         val intentCp = Intent(C.NOTIFICATION_ACTION_CP)
         val intentWp = Intent(C.NOTIFICATION_ACTION_WP)
 
         val pendingIntentCp = PendingIntent.getBroadcast(this, 0, intentCp, 0)
         val pendingIntentWp = PendingIntent.getBroadcast(this, 0, intentWp, 0)
 
-        val notifyview = RemoteViews(packageName, R.layout.statistics)
+        var notifyview = RemoteViews(packageName, R.layout.track_control)
 
-        notifyview.setOnClickPendingIntent(R.id.add_cp, pendingIntentCp)
-        notifyview.setOnClickPendingIntent(R.id.add_wp, pendingIntentWp)
+        notifyview.setOnClickPendingIntent(R.id.imageButtonCP, pendingIntentCp)
+        notifyview.setOnClickPendingIntent(R.id.imageButtonWP, pendingIntentWp)
 
+        headerValues.overall_average_speed = fillColumn(
+            notifyview,
+            headerValues.session_duration,
+            headerValues.overall_distance_covered,
+            R.id.col4,
+            String.format(
+                "%s:%s:%s", (headerValues.session_duration.toInt() / 3600).toString().padStart(2, '0'),
+                ((headerValues.session_duration.toInt() / 60) % 60).toString().padStart(2, '0'),
+                (headerValues.session_duration.toInt() % 60).toString().padStart(2, '0')
+            )
+        )
 
-//        notifyview.setTextViewText(R.id.col1)
-//        notifyview.setTextViewText(R.id.textViewOverallTotal, "%.2f".format(distanceOverallTotal))
-//
-//        notifyview.setTextViewText(R.id.textViewWPDirect, "%.2f".format(distanceWPDirect))
-//        notifyview.setTextViewText(R.id.textViewWPTotal, "%.2f".format(distanceWPTotal))
-//
-//        notifyview.setTextViewText(R.id.textViewCPDirect, "%.2f".format(distanceCPDirect))
-//        notifyview.setTextViewText(R.id.textViewCPTotal, "%.2f".format(distanceCPTotal))
+        headerValues.CP_average_speed =fillColumn(
+            notifyview,
+            headerValues.session_duration,
+            headerValues.CP_distance_overall,
+            R.id.col5,
+            ((headerValues.CP_distance_line * 10).toInt().toDouble() / 10).toString()
+        )
+
+        headerValues.WP_average_speed = fillColumn(
+            notifyview,
+            headerValues.session_duration,
+            headerValues.WP_distance_overall,
+            R.id.col6,
+            ((headerValues.WP_distance_line * 10).toInt().toDouble() / 10).toString()
+        )
 
         // construct and show notification
         var builder = NotificationCompat.Builder(applicationContext, C.NOTIFICATION_CHANNEL)
@@ -252,6 +267,35 @@ class LocationService : Service() {
 
     }
 
+    private fun fillColumn(
+        notifyview: RemoteViews,
+        sessionDuration: Float,
+        overallDistanceCovered: Float,
+        col: Int,
+        row2: String
+    ): Double {
+
+        var duration = sessionDuration.toInt()
+        var covered = overallDistanceCovered.toInt()
+        var averageSpeed = 0.0
+        if (covered != 0) {
+            averageSpeed =
+                (((duration * 1000.0) / (overallDistanceCovered * 60.0) * 10).roundToInt() / 10).toDouble()
+        }
+
+        notifyview.setTextViewText(
+            col,
+            String.format(
+                "%s\n%s\n%s",
+                covered,
+                row2,
+                averageSpeed
+            )
+        )
+
+        return averageSpeed
+    }
+
 
     private inner class InnerBroadcastReceiver: BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -259,19 +303,17 @@ class LocationService : Service() {
             when(intent!!.action){
                 C.NOTIFICATION_ACTION_WP -> {
                     locationWP = currentLocation
-                    distanceWPDirect = 0f
-                    distanceWPTotal = 0f
+                    headerValues.WP_distance_line = 0f
+                    headerValues.WP_distance_overall = 0f
                     showNotification()
                 }
                 C.NOTIFICATION_ACTION_CP -> {
                     locationCP = currentLocation
-                    distanceCPDirect = 0f
-                    distanceCPTotal = 0f
+                    headerValues.CP_distance_line = 0f
+                    headerValues.CP_distance_overall = 0f
                     showNotification()
                 }
             }
         }
-
     }
-
 }

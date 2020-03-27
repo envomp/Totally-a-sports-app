@@ -52,13 +52,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         private val TAG = this::class.java.declaringClass!!.simpleName
     }
 
-    private var stateUID = 0
-    private lateinit var map: GoogleMap
+    private var stateUID = 215761238
 
+    private val headerValues: StateVariables = StateVariables
+
+    // async
     private var locationServiceActive = false
     private val broadcastReceiver = InnerBroadcastReceiver()
     private val broadcastReceiverIntentFilter: IntentFilter = IntentFilter()
-
 
     // sensors
     lateinit var sensorManager: SensorManager
@@ -83,26 +84,15 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var is_options_toggeled = false
 
     // Dynamic modifiers
+    private var hasPermissions = false
     private var started = false
     private var add_WP = false
     private var add_CP = false
 
-    // COL 1
-    private var overall_distance_covered = 0 // meters
-    private var session_duration = 0 // seconds
-    private var overall_average_speed = 0.0
-
-    //COL 2
+    // map
+    private lateinit var map: GoogleMap
     private var CP: Marker? = null // capture points__ Only one!
-    private val CP_disance_overall = 0
-    private val CP_distance_line = 0
-    private var CP_average_speed = 0.0
-
-    // COL 3
     private var WP: Marker? = null // way points__ Only one!
-    private val WP_distance_overall = 0
-    private val WP_distance_line = 0
-    private var WP_average_speed = 0.0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -113,6 +103,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         if (!checkPermissions()) {
             requestPermissions()
+        } else {
+            hasPermissions = true
         }
 
         broadcastReceiverIntentFilter.addAction(C.LOCATION_UPDATE_ACTION)
@@ -176,6 +168,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             setOnMapClickListener {
                 if (add_CP) {
 
+                    CP?.remove()
                     CP = addMarker(
                         MarkerOptions().position(LatLng(userLatitude, userLongitude))
                             .title(String.format("Capture point"))
@@ -329,10 +322,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
                 val lastUID = stateUID
                 if (started && lastUID == stateUID) {
-                    session_duration += 1
+                    headerValues.session_duration += 1
                     updateVisibleText()
-                    // broadcast new location to UI
-                    findViewById<Button>(R.id.start_or_stop).text = "$userLatitude   $userLongitude"
                     gameLoop()
                 }
 
@@ -376,50 +367,53 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     private fun updateVisibleText() {
 
-        overall_average_speed = fillColumn(
-            session_duration,
-            overall_distance_covered,
+        fillColumn(
+            headerValues.session_duration,
+            headerValues.overall_distance_covered,
             R.id.col1,
             String.format(
-                "%s:%s:%s", (session_duration / 3600).toString().padStart(2, '0'),
-                ((session_duration / 60) % 60).toString().padStart(2, '0'),
-                (session_duration % 60).toString().padStart(2, '0')
+                "%s:%s:%s", (headerValues.session_duration.toInt() / 3600).toString().padStart(2, '0'),
+                ((headerValues.session_duration.toInt() / 60) % 60).toString().padStart(2, '0'),
+                (headerValues.session_duration.toInt() % 60).toString().padStart(2, '0')
             )
         )
 
-        CP_average_speed = fillColumn(
-            session_duration,
-            CP_disance_overall,
+        fillColumn(
+            headerValues.session_duration,
+            headerValues.CP_distance_overall,
             R.id.col2,
-            CP_disance_overall.toString()
+            ((headerValues.CP_distance_overall * 10).toInt().toDouble() / 10).toString()
         )
 
-        WP_average_speed = fillColumn(
-            session_duration,
-            WP_distance_overall,
+        fillColumn(
+            headerValues.session_duration,
+            headerValues.WP_distance_overall,
             R.id.col3,
-            WP_distance_overall.toString()
+            ((headerValues.WP_distance_overall * 10).toInt().toDouble() / 10).toString()
         )
 
     }
 
     private fun fillColumn(
-        sessionDuration: Int,
-        overallDistanceCovered: Int,
+        sessionDuration: Float,
+        overallDistanceCovered: Float,
         col: Int,
         row2: String
     ): Double {
 
+        var duration = sessionDuration.toInt()
+        var covered = overallDistanceCovered.toInt()
+
         var averageSpeed = 0.0
-        if (overallDistanceCovered != 0) {
+        if (covered != 0) {
             averageSpeed =
-                round((sessionDuration * 1000.0) / (overallDistanceCovered * 60.0) * 10) / 10
+                round((duration * 1000.0) / (covered * 60.0) * 10) / 10
         }
 
         findViewById<TextView>(col).text =
             String.format(
                 "%s\n%s\n%s",
-                overallDistanceCovered,
+                covered,
                 row2,
                 averageSpeed
             )
@@ -436,7 +430,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     override fun onResume() {
         super.onResume()
         mapView.onResume()
-        LocalBroadcastManager.getInstance(this).registerReceiver(broadcastReceiver, broadcastReceiverIntentFilter)
+        LocalBroadcastManager.getInstance(this)
+            .registerReceiver(broadcastReceiver, broadcastReceiverIntentFilter)
         sensorManager.registerListener(this, accelerometer, SENSOR_DELAY_GAME)
         sensorManager.registerListener(this, magnetometer, SENSOR_DELAY_GAME)
         Log.d(TAG, "lifecycle onResume")
@@ -623,7 +618,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         grantResults: IntArray
     ) {
         Log.i(TAG, "onRequestPermissionResult")
-        if (requestCode === C.REQUEST_PERMISSIONS_REQUEST_CODE) {
+        if (requestCode == C.REQUEST_PERMISSIONS_REQUEST_CODE) {
             when {
                 grantResults.count() <= 0 -> { // If user interaction was interrupted, the permission request is cancelled and you
                     // receive empty arrays.
@@ -631,8 +626,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     Toast.makeText(this, "User interaction was cancelled.", Toast.LENGTH_SHORT)
                         .show()
                 }
-                grantResults[0] === PackageManager.PERMISSION_GRANTED -> {// Permission was granted.
+                grantResults[0] == PackageManager.PERMISSION_GRANTED -> {// Permission was granted.
                     Log.i(TAG, "Permission was granted")
+                    hasPermissions = true
                     Toast.makeText(this, "Permission was granted", Toast.LENGTH_SHORT).show()
                 }
                 else -> { // Permission denied.
@@ -670,7 +666,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         sendBroadcast(Intent(C.NOTIFICATION_ACTION_CP))
     }
 
-
     private inner class InnerBroadcastReceiver : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             Log.d(TAG, intent!!.action)
@@ -685,6 +680,5 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
 
     }
-
 
 }
