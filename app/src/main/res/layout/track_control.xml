@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="64dp"
+    android:maxHeight="64dp"
+    android:orientation="horizontal">
+
+
+    <!-- no onclick allowed on remoteviews! if you are reusing this component, attach onClick in code-->
+
+    <TextView
+        android:id="@+id/col4"
+        android:layout_width="wrap_content"
+        android:layout_height="64dp"
+        android:layout_marginStart="4dp"
+        android:layout_marginTop="4dp"
+        android:layout_marginBottom="4dp"
+        android:layout_weight="1"
+        android:text="COL4"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toStartOf="@+id/divider"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintStart_toEndOf="@+id/start_or_stop"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <ImageButton
+        android:id="@+id/imageButtonCP"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:src="@drawable/ic_gps_fixed_black_24dp" />
+
+    <!-- no onclick allowed on remoteviews! if you are reusing this component, attach onClick in code-->
+    <TextView
+        android:id="@+id/col5"
+        android:layout_width="wrap_content"
+        android:layout_height="54dp"
+        android:layout_marginStart="4dp"
+        android:layout_marginTop="4dp"
+        android:layout_marginBottom="4dp"
+        android:layout_weight="1"
+        android:text="COL5"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toStartOf="@+id/divider"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintStart_toEndOf="@+id/start_or_stop"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <ImageButton
+        android:id="@+id/imageButtonWP"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:src="@drawable/baseline_outlined_flag_black_24" />
+
+    <TextView
+        android:id="@+id/col6"
+        android:layout_width="wrap_content"
+        android:layout_height="64dp"
+        android:layout_marginStart="4dp"
+        android:layout_marginTop="4dp"
+        android:layout_marginBottom="4dp"
+        android:layout_weight="1"
+        android:text="COL6"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toStartOf="@+id/divider"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintStart_toEndOf="@+id/start_or_stop"
+        app:layout_constraintTop_toTopOf="parent" />
+
+</LinearLayout>
