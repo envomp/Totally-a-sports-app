@@ -36,6 +36,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.res.ResourcesCompat
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
+import com.google.android.gms.maps.GoogleMap.CancelableCallback
 import com.google.android.gms.maps.MapsInitializer
 import com.google.android.gms.maps.model.*
 import com.google.android.material.snackbar.Snackbar
@@ -44,6 +45,7 @@ import ee.taltech.spormapsapp.StateVariables.WP_distance_overall
 import ee.taltech.spormapsapp.StateVariables.add_CP
 import ee.taltech.spormapsapp.StateVariables.add_WP
 import ee.taltech.spormapsapp.StateVariables.auto_add
+import ee.taltech.spormapsapp.StateVariables.currentLocation
 import ee.taltech.spormapsapp.StateVariables.locationCP
 import ee.taltech.spormapsapp.StateVariables.locationWP
 import ee.taltech.spormapsapp.StateVariables.overall_distance_covered
@@ -91,6 +93,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var started = false
 
     // map
+    private var finishedAnimation = true
     private lateinit var map: GoogleMap
     private var CP: Marker? = null // capture points__ Only one!
     private var WP: Marker? = null // way points__ Only one!
@@ -115,12 +118,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             getMapAsync {
                 map = it
                 MapsInitializer.initialize(applicationContext)
-                map.isMyLocationEnabled = true
-                map.uiSettings.isMyLocationButtonEnabled = true
+                if (hasPermissions) {
+                    map.isMyLocationEnabled = true
+                }
                 mapActions(it)
 
                 // create bounds that encompass every location we reference
-
+                cameraFocusPosition(map)
                 addMarkersToMap()
             }
         }
@@ -166,23 +170,47 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             mapType = GoogleMap.MAP_TYPE_TERRAIN
             setOnMapClickListener {
                 if (add_CP) {
-                    locationCP = map.myLocation
-                    addCheckPoint()
+                    if (currentLocation != null) {
+                        locationCP = Location(currentLocation)
+                        addCheckPoint()
+                    }
                 }
                 if (add_WP) {
-                    val location = map.myLocation
+                    val location = Location(currentLocation)
                     location.latitude = it.latitude
                     location.longitude = it.longitude
-
                     locationWP = location
                     addWayPoint()
                 }
                 setColorsAndTexts()
             }
 
-            map.setOnMyLocationChangeListener { location ->
-                mapTransformation(location, map)
+            map.setOnMyLocationButtonClickListener {
+                map.stopAnimation()
+                animateCamera(currentLocation, map, null)
+                finishedAnimation = false
+                true
             }
+
+            map.setOnMarkerClickListener {
+                map.stopAnimation()
+                val loc = Location(currentLocation)
+                loc.longitude = it.position.longitude
+                loc.latitude = it.position.latitude
+                animateCamera(loc, map, null)
+                finishedAnimation = false
+                true
+            }
+
+            map.setOnPoiClickListener {
+                map.stopAnimation()
+                val loc = Location(currentLocation)
+                loc.longitude = it.latLng.longitude
+                loc.latitude = it.latLng.latitude
+                animateCamera(loc, map, null)
+                finishedAnimation = false
+            }
+
         }
     }
 
@@ -227,27 +255,36 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         map: GoogleMap
     ) {
         if (locationServiceActive) {
+
+            if (is_compass_toggeled) {
+                location.bearing = actualDegree
+            }
+
             when (direction) {
                 0 -> {
                     // case CENTERED
+                    cameraFocusPosition(map)
                     animateCamera(location, map, null)
                 }
                 1 -> {
                     // case NORTH-UP
-                    animateCamera(location, map, 0f)
+                    cameraFocusRotation(map)
+                    animateCamera(null, map, 0f)
                 }
                 2 -> {
                     // case DIRECTION-UP
+                    cameraFocusRotation(map)
                     animateCamera(
-                        location,
+                        null,
                         map,
                         if (location.hasBearing()) location.bearing else null
                     )
                 }
                 3 -> {
                     // case CHOSEN-UP
+                    cameraFocusRotation(map)
                     animateCamera(
-                        location,
+                        null,
                         map,
                         if (locationWP != null) location.bearingTo(locationWP) else null
                     )
@@ -255,6 +292,20 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
         }
 
+    }
+
+    private fun cameraFocusPosition(map: GoogleMap) {
+        map.uiSettings.isMyLocationButtonEnabled = false
+        map.uiSettings.isRotateGesturesEnabled = true
+        map.uiSettings.isCompassEnabled = false
+        map.uiSettings.isScrollGesturesEnabledDuringRotateOrZoom = false
+    }
+
+    private fun cameraFocusRotation(map: GoogleMap) {
+        map.uiSettings.isMyLocationButtonEnabled = true
+        map.uiSettings.isRotateGesturesEnabled = false
+        map.uiSettings.isCompassEnabled = false
+        map.uiSettings.isScrollGesturesEnabledDuringRotateOrZoom = true
     }
 
     private fun animateCamera(
@@ -285,7 +336,16 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             pos.bearing(bearing)
         }
 
-        map.animateCamera(CameraUpdateFactory.newCameraPosition(pos.build()))
+        map.animateCamera(CameraUpdateFactory.newCameraPosition(pos.build()),
+            object : CancelableCallback {
+                override fun onFinish() {
+                    finishedAnimation = true
+                }
+
+                override fun onCancel() {
+                    finishedAnimation = true
+                }
+            })
     }
 
     private fun wireGameButtons() {
@@ -379,6 +439,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     session_duration += 0.1f
                     updateVisibleText()
 
+                    if (currentLocation != null && finishedAnimation) {
+                        finishedAnimation = false;
+                        mapTransformation(currentLocation!!, map)
+                    }
+
                     if (auto_add) {
                         if (add_CP) {
                             map.addCheckPoint()
@@ -387,7 +452,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                         if (add_WP) {
                             map.addWayPoint()
                         }
-                        auto_add = false;
+                        auto_add = false
                     }
 
                     gameLoop()
