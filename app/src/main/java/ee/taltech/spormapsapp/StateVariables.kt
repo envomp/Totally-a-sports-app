@@ -31,4 +31,5 @@ object StateVariables {
     // doStuff
     var add_WP = false
     var add_CP = false
+    var auto_add = false
 }

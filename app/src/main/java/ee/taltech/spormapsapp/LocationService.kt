@@ -23,6 +23,7 @@ import ee.taltech.spormapsapp.StateVariables.WP_distance_line
 import ee.taltech.spormapsapp.StateVariables.WP_distance_overall
 import ee.taltech.spormapsapp.StateVariables.add_CP
 import ee.taltech.spormapsapp.StateVariables.add_WP
+import ee.taltech.spormapsapp.StateVariables.auto_add
 import ee.taltech.spormapsapp.StateVariables.currentLocation
 import ee.taltech.spormapsapp.StateVariables.line_distance_covered
 import ee.taltech.spormapsapp.StateVariables.locationCP
@@ -308,6 +309,7 @@ class LocationService : Service() {
             when (intent.action) {
                 C.NOTIFICATION_ACTION_WP -> {
                     if (!add_WP) {
+                        auto_add = true
                         locationWP = currentLocation
                         add_WP = true
                         WP_distance_line = 0f
@@ -317,6 +319,7 @@ class LocationService : Service() {
                 }
                 C.NOTIFICATION_ACTION_CP -> {
                     if (!add_CP) {
+                        auto_add = true
                         locationCP = currentLocation
                         add_CP = true
                         CP_distance_line = 0f

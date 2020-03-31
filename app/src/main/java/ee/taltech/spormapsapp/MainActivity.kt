@@ -34,7 +34,6 @@ import androidx.annotation.DrawableRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.res.ResourcesCompat
-import com.google.android.gms.maps.CameraUpdate
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.MapsInitializer
@@ -44,6 +43,7 @@ import ee.taltech.spormapsapp.StateVariables.CP_distance_overall
 import ee.taltech.spormapsapp.StateVariables.WP_distance_overall
 import ee.taltech.spormapsapp.StateVariables.add_CP
 import ee.taltech.spormapsapp.StateVariables.add_WP
+import ee.taltech.spormapsapp.StateVariables.auto_add
 import ee.taltech.spormapsapp.StateVariables.locationCP
 import ee.taltech.spormapsapp.StateVariables.locationWP
 import ee.taltech.spormapsapp.StateVariables.overall_distance_covered
@@ -73,6 +73,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     // sensor data
     var currentDegree = 0.0f
+    var actualDegree = 0.0f
     var lastAccelerometer = FloatArray(3)
     var lastMagnetometer = FloatArray(3)
     var lastAccelerometerSet = false
@@ -225,30 +226,66 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         location: Location,
         map: GoogleMap
     ) {
-        when (direction) {
-            0 -> {
-                // case CENTERED
-                //                map.animateCamera(CameraUpdateFactory.newLatLngZoom(, 16f));
-                val center: CameraUpdate = CameraUpdateFactory.newLatLng(
-                    LatLng(
-                        location.latitude,
-                        location.longitude
+        if (locationServiceActive) {
+            when (direction) {
+                0 -> {
+                    // case CENTERED
+                    animateCamera(location, map, null)
+                }
+                1 -> {
+                    // case NORTH-UP
+                    animateCamera(location, map, 0f)
+                }
+                2 -> {
+                    // case DIRECTION-UP
+                    animateCamera(
+                        location,
+                        map,
+                        if (location.hasBearing()) location.bearing else null
                     )
-                )
-                val zoom: CameraUpdate = CameraUpdateFactory.zoomTo(20f)
-                map.moveCamera(center)
-                map.animateCamera(zoom)
-            }
-            1 -> {
-                // case NORTH-UP
-            }
-            2 -> {
-                // case DIRECTION-UP
-            }
-            3 -> {
-                // case CHOSEN-UP
+                }
+                3 -> {
+                    // case CHOSEN-UP
+                    animateCamera(
+                        location,
+                        map,
+                        if (locationWP != null) location.bearingTo(locationWP) else null
+                    )
+                }
             }
         }
+
+    }
+
+    private fun animateCamera(
+        location: Location?,
+        map: GoogleMap,
+        bearing: Float?
+    ) {
+
+        val oldPos: CameraPosition = map.cameraPosition
+
+        val pos = CameraPosition.builder(oldPos)
+            .zoom(
+                map.cameraPosition.zoom.coerceAtLeast(
+                    14f
+                )
+            )
+
+        if (location != null) {
+            pos.target(
+                LatLng(
+                    location.latitude,
+                    location.longitude
+                )
+            )
+        }
+
+        if (bearing != null) {
+            pos.bearing(bearing)
+        }
+
+        map.animateCamera(CameraUpdateFactory.newCameraPosition(pos.build()))
     }
 
     private fun wireGameButtons() {
@@ -339,22 +376,25 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
                 val lastUID = stateUID
                 if (started && lastUID == stateUID) {
-                    session_duration += 1
+                    session_duration += 0.1f
                     updateVisibleText()
 
-                    if (add_CP) {
-                        map.addCheckPoint()
-                    }
+                    if (auto_add) {
+                        if (add_CP) {
+                            map.addCheckPoint()
+                        }
 
-                    if (add_WP) {
-                        map.addWayPoint()
+                        if (add_WP) {
+                            map.addWayPoint()
+                        }
+                        auto_add = false;
                     }
 
                     gameLoop()
                 }
 
             },
-            1000 // value in milliseconds
+            100 // value in milliseconds
         )
     }
 
@@ -522,11 +562,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             if (SensorManager.getRotationMatrix(r, null, lastAccelerometer, lastMagnetometer)) {
                 val orientation = FloatArray(3)
                 SensorManager.getOrientation(r, orientation)
-                val degree = (toDegrees(orientation[0].toDouble()) + 360).toFloat() % 360
+                actualDegree = (toDegrees(orientation[0].toDouble()) + 360).toFloat() % 360
 
                 val rotateAnimation = RotateAnimation(
                     currentDegree,
-                    -degree,
+                    -actualDegree,
                     RELATIVE_TO_SELF, 0.5f,
                     RELATIVE_TO_SELF, 0.5f
                 )
@@ -534,7 +574,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 rotateAnimation.fillAfter = true
 
                 image.startAnimation(rotateAnimation)
-                currentDegree = -degree
+                currentDegree = -actualDegree
             }
         }
     }
