@@ -23,6 +23,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.provider.Settings
 import android.util.Log
+import android.view.Surface
 import android.view.View
 import android.view.animation.Animation.RELATIVE_TO_SELF
 import android.view.animation.RotateAnimation
@@ -630,8 +631,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 actualDegree = (toDegrees(orientation[0].toDouble()) + 360).toFloat() % 360
 
                 val rotateAnimation = RotateAnimation(
-                    currentDegree,
-                    -actualDegree,
+                    currentDegree - windowManager.defaultDisplay.rotation * 90,
+                    actualDegree - windowManager.defaultDisplay.rotation * 90,
                     RELATIVE_TO_SELF, 0.5f,
                     RELATIVE_TO_SELF, 0.5f
                 )
