@@ -23,7 +23,6 @@ import android.os.Bundle
 import android.os.Handler
 import android.provider.Settings
 import android.util.Log
-import android.view.Surface
 import android.view.View
 import android.view.animation.Animation.RELATIVE_TO_SELF
 import android.view.animation.RotateAnimation
@@ -41,16 +40,23 @@ import com.google.android.gms.maps.GoogleMap.CancelableCallback
 import com.google.android.gms.maps.MapsInitializer
 import com.google.android.gms.maps.model.*
 import com.google.android.material.snackbar.Snackbar
+import ee.taltech.spormapsapp.StateVariables.CP_average_speed
+import ee.taltech.spormapsapp.StateVariables.CP_distance_line
 import ee.taltech.spormapsapp.StateVariables.CP_distance_overall
+import ee.taltech.spormapsapp.StateVariables.WP_average_speed
+import ee.taltech.spormapsapp.StateVariables.WP_distance_line
 import ee.taltech.spormapsapp.StateVariables.WP_distance_overall
 import ee.taltech.spormapsapp.StateVariables.add_CP
 import ee.taltech.spormapsapp.StateVariables.add_WP
 import ee.taltech.spormapsapp.StateVariables.auto_add
 import ee.taltech.spormapsapp.StateVariables.currentLocation
+import ee.taltech.spormapsapp.StateVariables.line_distance_covered
 import ee.taltech.spormapsapp.StateVariables.locationCP
 import ee.taltech.spormapsapp.StateVariables.locationWP
+import ee.taltech.spormapsapp.StateVariables.overall_average_speed
 import ee.taltech.spormapsapp.StateVariables.overall_distance_covered
 import ee.taltech.spormapsapp.StateVariables.session_duration
+import ee.taltech.spormapsapp.StateVariables.stateUID
 import kotlinx.android.synthetic.main.map.*
 import java.lang.Math.toDegrees
 import kotlin.math.round
@@ -60,10 +66,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     companion object {
         private val TAG = this::class.java.declaringClass!!.simpleName
     }
-
-    private var stateUID = 215761238
-
-    private val headerValues: StateVariables = StateVariables
 
     // async
     private var locationServiceActive = false
@@ -94,10 +96,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private var started = false
 
     // map
-    private var finishedAnimation = true
+    var finishedAnimation = true
     private lateinit var map: GoogleMap
-    private var CP: Marker? = null // capture points__ Only one!
-    private var WP: Marker? = null // way points__ Only one!
+    var CP: List<Marker> = mutableListOf() // capture points
+    var WP: Marker? = null // way points. Only one!
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -126,7 +128,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
                 // create bounds that encompass every location we reference
                 cameraFocusPosition(map)
-                addMarkersToMap()
             }
         }
 
@@ -146,22 +147,18 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             map.addMarker(
                 MarkerOptions().position(WP!!.position)
                     .title("Added a way point")
-                    .draggable(true)
                     .icon(vectorToBitmap(R.drawable.waypoint, 100, 150))
             )
         }
 
-        if (CP != null) {
-            CP!!.remove()
+        for (cp in CP) {
+            cp.remove()
             map.addMarker(
-                MarkerOptions().position(CP!!.position)
-                    .title("Added a way point")
-                    .draggable(true)
+                MarkerOptions().position(cp.position)
+                    .title("Added a capture point")
                     .icon(vectorToBitmap(R.drawable.capturepoint, 100, 150))
             )
         }
-
-
     }
 
     private fun mapActions(map: GoogleMap) {
@@ -174,16 +171,34 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     if (currentLocation != null) {
                         locationCP = Location(currentLocation)
                         addCheckPoint()
+                    } else {
+                        add_CP = false
+                        Toast.makeText(
+                            this@MainActivity,
+                            "Start the game to add CP",
+                            Toast.LENGTH_SHORT
+                        ).show()
                     }
+                    setColorsAndTexts()
+
                 }
                 if (add_WP) {
-                    val location = Location(currentLocation)
-                    location.latitude = it.latitude
-                    location.longitude = it.longitude
-                    locationWP = location
-                    addWayPoint()
+                    if (currentLocation != null) {
+                        val location = Location(currentLocation)
+                        location.latitude = it.latitude
+                        location.longitude = it.longitude
+                        locationWP = location
+                        addWayPoint()
+                    } else {
+                        add_WP = false
+                        Toast.makeText(
+                            this@MainActivity,
+                            "Start the game to add WP",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                    setColorsAndTexts()
                 }
-                setColorsAndTexts()
             }
 
             map.setOnMyLocationButtonClickListener {
@@ -191,25 +206,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 animateCamera(currentLocation, map, null)
                 finishedAnimation = false
                 true
-            }
-
-            map.setOnMarkerClickListener {
-                map.stopAnimation()
-                val loc = Location(currentLocation)
-                loc.longitude = it.position.longitude
-                loc.latitude = it.position.latitude
-                animateCamera(loc, map, null)
-                finishedAnimation = false
-                true
-            }
-
-            map.setOnPoiClickListener {
-                map.stopAnimation()
-                val loc = Location(currentLocation)
-                loc.longitude = it.latLng.longitude
-                loc.latitude = it.latLng.latitude
-                animateCamera(loc, map, null)
-                finishedAnimation = false
             }
 
         }
@@ -221,7 +217,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             WP = addMarker(
                 MarkerOptions().position(LatLng(locationWP!!.latitude, locationWP!!.longitude))
                     .title("Way point")
-                    .draggable(true)
                     .icon(vectorToBitmap(R.drawable.waypoint, 100, 150))
             )
 
@@ -233,17 +228,17 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     private fun GoogleMap.addCheckPoint() {
         if (add_CP && locationCP != null) {
-            CP?.remove()
-            CP = addMarker(
-                MarkerOptions().position(LatLng(locationCP!!.latitude, locationCP!!.longitude))
-                    .title(String.format("Capture point"))
-                    .draggable(true)
-                    .icon(vectorToBitmap(R.drawable.capturepoint, 100, 150))
+            CP = CP.plus(
+                addMarker(
+                    MarkerOptions().position(LatLng(locationCP!!.latitude, locationCP!!.longitude))
+                        .title(String.format("Capture point nr. " + (CP.size + 1)))
+                        .icon(vectorToBitmap(R.drawable.capturepoint, 100, 150))
+                )
             )
 
             Toast.makeText(
                 this@MainActivity,
-                String.format("Added a capture point"),
+                String.format("Added a capture point nr. " + (CP.size)),
                 Toast.LENGTH_SHORT
             )
                 .show()
@@ -369,7 +364,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             }
             locationServiceActive = !locationServiceActive
             setColorsAndTexts()
-            gameLoop()
+            gameLoop(stateUID)
         }
 
         findViewById<Button>(R.id.add_wp).setBackgroundColor(resources.getColor(R.color.colorGreen))
@@ -383,6 +378,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         findViewById<Button>(R.id.add_cp).setOnClickListener {
             add_CP = !add_CP
             add_WP = false
+            auto_add = true
             setColorsAndTexts()
         }
 
@@ -396,23 +392,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         findViewById<Button>(R.id.compass).setOnClickListener {
             is_compass_toggeled = !is_compass_toggeled
             setColorsAndTexts()
-        }
-
-        findViewById<Button>(R.id.reset).setBackgroundColor(resources.getColor(R.color.colorGreen))
-        findViewById<Button>(R.id.reset).setOnClickListener {
-            // RESET EVERYTHING
-            map.clear()
-            WP = null
-            CP = null
-            setColorsAndTexts()
-
-            findViewById<Button>(R.id.reset).setBackgroundColor(resources.getColor(R.color.colorGreener))
-            Handler().postDelayed(
-                {
-                    findViewById<Button>(R.id.reset).setBackgroundColor(resources.getColor(R.color.colorGreen))
-                },
-                100 // value in milliseconds
-            )
         }
 
         findViewById<Button>(R.id.position).setBackgroundColor(resources.getColor(R.color.colorGreen))
@@ -431,17 +410,16 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
     }
 
-    private fun gameLoop() {
+    private fun gameLoop(lastUID: Int) {
         Handler().postDelayed(
             {
 
-                val lastUID = stateUID
                 if (started && lastUID == stateUID) {
                     session_duration += 0.1f
                     updateVisibleText()
 
                     if (currentLocation != null && finishedAnimation) {
-                        finishedAnimation = false;
+                        finishedAnimation = false
                         mapTransformation(currentLocation!!, map)
                     }
 
@@ -456,7 +434,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                         auto_add = false
                     }
 
-                    gameLoop()
+                    gameLoop(lastUID)
                 }
 
             },
@@ -584,11 +562,124 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         Log.d(TAG, "lifecycle onRestoreInstanceState")
+
+
+        outState.putFloat("overall_distance_covered", overall_distance_covered)
+        outState.putFloat("line_distance_covered", line_distance_covered)
+        outState.putFloat("session_duration", session_duration)
+        outState.putDouble("overall_average_speed", overall_average_speed)
+
+        outState.putFloat("CP_distance_overall", CP_distance_overall)
+        outState.putFloat("CP_distance_line", CP_distance_line)
+        outState.putDouble("CP_average_speed", CP_average_speed)
+
+        outState.putFloat("WP_distance_overall", WP_distance_overall)
+        outState.putFloat("WP_distance_line", WP_distance_line)
+        outState.putDouble("WP_average_speed", WP_average_speed)
+
+        outState.putBoolean("locationServiceActive", locationServiceActive)
+
+        outState.putFloat("currentDegree", currentDegree)
+        outState.putFloat("actualDegree ", actualDegree)
+        outState.putBoolean("is_compass_toggeled", is_compass_toggeled)
+        outState.putBoolean("is_options_toggeled", is_options_toggeled)
+        outState.putBoolean("hasPermissions", hasPermissions)
+        outState.putBoolean("started", started)
+        outState.putInt("direction", direction)
+        outState.putBoolean("WP_exists", WP != null)
+        if (WP != null) {
+            outState.putDouble("WP_lat", WP!!.position.latitude)
+            outState.putDouble("WP_lng", WP!!.position.longitude)
+        }
+
+        outState.putInt("CP_size", CP.size)
+        for ((i, cp) in CP.withIndex()) {
+            outState.putDouble("CP_lat_$i", cp.position.latitude)
+            outState.putDouble("CP_lng_$i", cp.position.longitude)
+        }
+
     }
 
     override fun onRestoreInstanceState(savedInstanceState: Bundle) {
         super.onRestoreInstanceState(savedInstanceState)
         Log.d(TAG, "lifecycle onRestoreInstanceState")
+        stateUID = (Math.random() * 100000).toInt()
+
+        overall_distance_covered = savedInstanceState.getFloat("overall_distance_covered")
+        line_distance_covered = savedInstanceState.getFloat("line_distance_covered")
+        session_duration = savedInstanceState.getFloat("session_duration")
+        overall_average_speed = savedInstanceState.getDouble("overall_average_speed")
+
+        CP_distance_overall = savedInstanceState.getFloat("CP_distance_overall")
+        CP_distance_line = savedInstanceState.getFloat("CP_distance_line")
+        CP_average_speed = savedInstanceState.getDouble("CP_average_speed")
+
+        WP_distance_overall = savedInstanceState.getFloat("WP_distance_overall")
+        WP_distance_line = savedInstanceState.getFloat("WP_distance_line")
+        WP_average_speed = savedInstanceState.getDouble("WP_average_speed")
+
+        locationServiceActive = savedInstanceState.getBoolean("locationServiceActive")
+
+        currentDegree = savedInstanceState.getFloat("currentDegree")
+        actualDegree = savedInstanceState.getFloat("actualDegree")
+        is_compass_toggeled = savedInstanceState.getBoolean("is_compass_toggeled")
+        is_options_toggeled = savedInstanceState.getBoolean("is_options_toggeled")
+        hasPermissions = savedInstanceState.getBoolean("hasPermissions")
+        started = savedInstanceState.getBoolean("started")
+        direction = savedInstanceState.getInt("direction")
+
+        with(mapView) {
+            // Initialise the MapView
+            onCreate(savedInstanceState)
+            // Set the map ready callback to receive the GoogleMap object
+            getMapAsync {
+                map = it
+                MapsInitializer.initialize(applicationContext)
+                if (hasPermissions) {
+                    map.isMyLocationEnabled = true
+                }
+                mapActions(it)
+
+                if (savedInstanceState.getBoolean("WP_exists")) {
+                    WP = map.addMarker(
+                        MarkerOptions().position(
+                            LatLng(
+                                savedInstanceState.getDouble("WP_lat"),
+                                savedInstanceState.getDouble("WP_lng")
+                            )
+                        )
+                            .title("Way point")
+                            .icon(vectorToBitmap(R.drawable.waypoint, 100, 150))
+                    )
+                }
+
+                for (i in 0 until savedInstanceState.getInt("CP_size")) {
+                    CP = CP.plus(
+                        map.addMarker(
+                            MarkerOptions().position(
+                                LatLng(
+                                    savedInstanceState.getDouble("CP_lat_$i"),
+                                    savedInstanceState.getDouble("CP_lng_$i")
+                                )
+                            )
+                                .title(String.format("Capture point" + (i + 1)))
+                                .icon(vectorToBitmap(R.drawable.capturepoint, 100, 150))
+                        )
+                    )
+                }
+
+                // create bounds that encompass every location we reference
+                cameraFocusPosition(map)
+                setColorsAndTexts()
+                gameLoop(stateUID)
+                if (currentLocation != null) {
+                    map.stopAnimation()
+                    animateCamera(currentLocation, map, null)
+                    finishedAnimation = false
+                }
+            }
+        }
+
     }
 
     /**
@@ -699,7 +790,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
             Snackbar.make(
                 findViewById(R.id.activity_main),
-                "Hey, i really need to access GPS!",
+                "Hey, I really need to access GPS!",
                 Snackbar.LENGTH_INDEFINITE
             )
                 .setAction("OK", View.OnClickListener {

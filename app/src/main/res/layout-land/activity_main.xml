@@ -15,8 +15,10 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintDimensionRatio=""
         app:layout_constraintEnd_toStartOf="@+id/divider6"
-        app:layout_constraintStart_toEndOf="@+id/divider7"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.0" />
 
     <include
         android:id="@+id/game_header"
@@ -46,15 +48,6 @@
         app:layout_constraintEnd_toStartOf="@+id/game_statistics"
         app:layout_constraintTop_toTopOf="parent" />
 
-    <View
-        android:id="@+id/divider7"
-        android:layout_width="1dp"
-        android:layout_height="match_parent"
-        android:background="?android:attr/listDivider"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toEndOf="@+id/game_header"
-        app:layout_constraintTop_toTopOf="parent" />
-
     <ImageView
         android:id="@+id/imageViewCompass"
         android:layout_width="200dp"
@@ -67,6 +60,6 @@
         android:scaleType="fitXY"
         android:src="@drawable/ic_compass"
         app:layout_constraintBottom_toBottomOf="@+id/game_map"
-        app:layout_constraintEnd_toStartOf="@+id/divider6" />
+        app:layout_constraintStart_toStartOf="@+id/game_map" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

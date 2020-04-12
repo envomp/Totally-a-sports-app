@@ -4,6 +4,8 @@ import android.location.Location
 
 object StateVariables {
 
+    var stateUID = 215761238 // helps to handle the state
+
     // COL 1
     var overall_distance_covered = 0f // meters
     var line_distance_covered = 0f // meters

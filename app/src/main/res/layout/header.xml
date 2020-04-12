@@ -9,43 +9,35 @@
         android:id="@+id/position"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:drawableLeft="@drawable/ic_gps_fixed_black_24dp"
+        android:drawableStart="@drawable/ic_gps_fixed_black_24dp"
         android:text="CENTERED"
-        app:layout_constraintEnd_toStartOf="@+id/reset"
+        android:paddingLeft="16px"
+        app:layout_constraintEnd_toStartOf="@+id/compass"
         app:layout_constraintHorizontal_bias="0.5"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
-
-    <Button
-        android:id="@+id/reset"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:drawableLeft="@drawable/ic_delete_forever_black_24dp"
-        android:text="reset"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.5"
-        app:layout_constraintStart_toEndOf="@+id/position"
         app:layout_constraintTop_toTopOf="parent" />
 
     <Button
         android:id="@+id/compass"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:drawableLeft="@drawable/compass"
+        android:drawableStart="@drawable/compass"
         android:text="compass"
+        android:paddingLeft="16px"
         app:layout_constraintEnd_toStartOf="@+id/options"
         app:layout_constraintHorizontal_bias="0.5"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/position" />
+        app:layout_constraintStart_toEndOf="@+id/position"
+        app:layout_constraintTop_toTopOf="parent" />
 
     <Button
         android:id="@+id/options"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:drawableLeft="@drawable/ic_settings_black_24dp"
+        android:drawableStart="@drawable/ic_settings_black_24dp"
         android:text="Options"
+        android:paddingLeft="16px"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.5"
         app:layout_constraintStart_toEndOf="@+id/compass"
-        app:layout_constraintTop_toBottomOf="@+id/reset" />
+        app:layout_constraintTop_toTopOf="parent" />
 </androidx.constraintlayout.widget.ConstraintLayout>
