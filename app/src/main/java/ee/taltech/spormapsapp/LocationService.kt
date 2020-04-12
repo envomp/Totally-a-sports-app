@@ -25,6 +25,7 @@ import ee.taltech.spormapsapp.StateVariables.add_CP
 import ee.taltech.spormapsapp.StateVariables.add_WP
 import ee.taltech.spormapsapp.StateVariables.auto_add
 import ee.taltech.spormapsapp.StateVariables.currentLocation
+import ee.taltech.spormapsapp.StateVariables.fillColumn
 import ee.taltech.spormapsapp.StateVariables.line_distance_covered
 import ee.taltech.spormapsapp.StateVariables.locationCP
 import ee.taltech.spormapsapp.StateVariables.locationStart
@@ -51,9 +52,6 @@ class LocationService : Service() {
     private val mLocationRequest: LocationRequest = LocationRequest()
     private lateinit var mFusedLocationClient: FusedLocationProviderClient
     private var mLocationCallback: LocationCallback? = null
-
-    // headers
-    private val headerValues: StateVariables = StateVariables
 
     override fun onCreate() {
         Log.d(TAG, "onCreate")
@@ -99,17 +97,24 @@ class LocationService : Service() {
         Log.i(TAG, "New location: $location")
         if (currentLocation == null) {
             locationStart = location
-            locationCP = location
-            locationWP = location
         } else {
             line_distance_covered = location.distanceTo(locationStart)
             overall_distance_covered += location.distanceTo(currentLocation)
 
-            CP_distance_line = location.distanceTo(locationCP)
-            CP_distance_overall += location.distanceTo(currentLocation)
+            if (locationCP == null) {
+                CP_distance_line = -1.0f;
+            } else {
+                CP_distance_line = location.distanceTo(locationCP)
+                CP_distance_overall += location.distanceTo(currentLocation)
+            }
 
-            WP_distance_line = location.distanceTo(locationWP)
-            WP_distance_overall += location.distanceTo(currentLocation)
+            if (locationWP == null) {
+                WP_distance_line = -1.0f;
+            } else {
+                WP_distance_line = location.distanceTo(locationWP)
+                WP_distance_overall += location.distanceTo(currentLocation)
+            }
+
         }
         // save the location for calculations
         currentLocation = location
@@ -247,7 +252,7 @@ class LocationService : Service() {
             session_duration,
             CP_distance_overall,
             R.id.col5,
-            ((CP_distance_line * 10).toInt().toDouble() / 10).toString()
+            "${((CP_distance_line * 10).toInt().toDouble() / 10)} m"
         )
 
         WP_average_speed = fillColumn(
@@ -255,7 +260,7 @@ class LocationService : Service() {
             session_duration,
             WP_distance_overall,
             R.id.col6,
-            ((WP_distance_line * 10).toInt().toDouble() / 10).toString()
+            "${((WP_distance_line * 10).toInt().toDouble() / 10)} m"
         )
 
         // construct and show notification
@@ -272,36 +277,6 @@ class LocationService : Service() {
         startForeground(C.NOTIFICATION_ID, builder.build())
 
     }
-
-    private fun fillColumn(
-        notifyview: RemoteViews,
-        sessionDuration: Float,
-        overallDistanceCovered: Float,
-        col: Int,
-        row2: String
-    ): Double {
-
-        val duration = sessionDuration.toInt()
-        val covered = overallDistanceCovered.toInt()
-        var averageSpeed = 0.0
-        if (covered != 0) {
-            averageSpeed =
-                (((duration * 1000.0) / (overallDistanceCovered * 60.0) * 10).roundToInt() / 10).toDouble()
-        }
-
-        notifyview.setTextViewText(
-            col,
-            String.format(
-                "%s\n%s\n%s",
-                covered,
-                row2,
-                averageSpeed
-            )
-        )
-
-        return averageSpeed
-    }
-
 
     private inner class InnerBroadcastReceiver : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {

@@ -52,6 +52,7 @@ import ee.taltech.spormapsapp.StateVariables.auto_add
 import ee.taltech.spormapsapp.StateVariables.currentLocation
 import ee.taltech.spormapsapp.StateVariables.line_distance_covered
 import ee.taltech.spormapsapp.StateVariables.locationCP
+import ee.taltech.spormapsapp.StateVariables.locationStart
 import ee.taltech.spormapsapp.StateVariables.locationWP
 import ee.taltech.spormapsapp.StateVariables.overall_average_speed
 import ee.taltech.spormapsapp.StateVariables.overall_distance_covered
@@ -59,7 +60,6 @@ import ee.taltech.spormapsapp.StateVariables.session_duration
 import ee.taltech.spormapsapp.StateVariables.stateUID
 import kotlinx.android.synthetic.main.map.*
 import java.lang.Math.toDegrees
-import kotlin.math.round
 
 
 class MainActivity : AppCompatActivity(), SensorEventListener {
@@ -69,6 +69,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     // async
     private var locationServiceActive = false
+    private var stateVariables: StateVariables = StateVariables
 
     // sensors
     lateinit var sensorManager: SensorManager
@@ -98,8 +99,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     // map
     var finishedAnimation = true
     private lateinit var map: GoogleMap
-    var CP: List<Marker> = mutableListOf() // capture points
+    var CP: MutableList<Marker> = mutableListOf() // capture points
     var WP: Marker? = null // way points. Only one!
+    var SP: Marker? = null // way points. Only one!
+    var polylines: MutableList<LatLng> = mutableListOf() // path
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -228,7 +231,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     private fun GoogleMap.addCheckPoint() {
         if (add_CP && locationCP != null) {
-            CP = CP.plus(
+            CP.add(
                 addMarker(
                     MarkerOptions().position(LatLng(locationCP!!.latitude, locationCP!!.longitude))
                         .title(String.format("Capture point nr. " + (CP.size + 1)))
@@ -361,10 +364,11 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     startService(Intent(this, LocationService::class.java))
                 }
 
+                initializeService(stateUID)
             }
             locationServiceActive = !locationServiceActive
             setColorsAndTexts()
-            gameLoop(stateUID)
+            gameLoop(stateUID, null)
         }
 
         findViewById<Button>(R.id.add_wp).setBackgroundColor(resources.getColor(R.color.colorGreen))
@@ -378,7 +382,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         findViewById<Button>(R.id.add_cp).setOnClickListener {
             add_CP = !add_CP
             add_WP = false
-            auto_add = true
             setColorsAndTexts()
         }
 
@@ -398,8 +401,8 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         findViewById<Button>(R.id.position).setOnClickListener {
             direction += 1
             direction %= 4
+            setColorsAndTexts()
 
-            findViewById<Button>(R.id.position).text = direction_map[direction]
             findViewById<Button>(R.id.position).setBackgroundColor(resources.getColor(R.color.colorGreener))
             Handler().postDelayed(
                 {
@@ -410,11 +413,37 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
     }
 
-    private fun gameLoop(lastUID: Int) {
+    private fun initializeService(lastUID: Int) {
+        Handler().postDelayed(
+            {
+                if (hasPermissions && locationServiceActive && started && lastUID == stateUID) {
+                    if (locationStart == null) {
+                        initializeService(lastUID) // Try again later
+                    } else {
+                        SP = map.addMarker(
+                            MarkerOptions().position(
+                                LatLng(
+                                    locationStart!!.latitude,
+                                    locationStart!!.longitude
+                                )
+                            )
+                                .title("Starting point")
+                                .icon(vectorToBitmap(R.drawable.startingpoint, 100, 150))
+                        )
+                    }
+                }
+            }
+            ,
+            100 // value in milliseconds
+        )
+    }
+
+    private fun gameLoop(lastUID: Int, used_location: Location?) {
         Handler().postDelayed(
             {
 
                 if (started && lastUID == stateUID) {
+
                     session_duration += 0.1f
                     updateVisibleText()
 
@@ -434,7 +463,22 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                         auto_add = false
                     }
 
-                    gameLoop(lastUID)
+
+                    if (currentLocation == null) {
+                        gameLoop(lastUID, null)
+                    } else {
+                        val new_location = Location(currentLocation)
+                        polylines.add(LatLng(new_location.latitude, new_location.longitude))
+                        if (used_location != null) {
+                            map.addPolyline(
+                                PolylineOptions().add(
+                                    LatLng(used_location.latitude, used_location.longitude),
+                                    LatLng(new_location.latitude, new_location.longitude)
+                                )
+                            )
+                        }
+                        gameLoop(lastUID, new_location)
+                    }
                 }
 
             },
@@ -444,6 +488,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     private fun setColorsAndTexts() {
         findViewById<Button>(R.id.start_or_stop).text = if (started) "STOP" else "START"
+        findViewById<Button>(R.id.position).text = direction_map[direction]
         findViewById<Button>(R.id.start_or_stop).setBackgroundColor(resources.getColor(if (started) R.color.colorGreener else R.color.colorGreen))
         findViewById<Button>(R.id.add_wp).setBackgroundColor(resources.getColor(if (add_WP) R.color.colorGreener else R.color.colorGreen))
         findViewById<Button>(R.id.add_cp).setBackgroundColor(resources.getColor(if (add_CP) R.color.colorGreener else R.color.colorGreen))
@@ -475,14 +520,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             session_duration,
             CP_distance_overall,
             R.id.col2,
-            ((CP_distance_overall * 10).toInt().toDouble() / 10).toString()
+            "${((CP_distance_line * 10).toInt().toDouble() / 10)} m"
         )
 
         fillColumn(
             session_duration,
             WP_distance_overall,
             R.id.col3,
-            ((WP_distance_overall * 10).toInt().toDouble() / 10).toString()
+            "${((WP_distance_line * 10).toInt().toDouble() / 10)} m"
         )
 
     }
@@ -494,23 +539,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         row2: String
     ): Double {
 
-        var duration = sessionDuration.toInt()
-        var covered = overallDistanceCovered.toInt()
+        val (averageSpeed, text) = StateVariables.getColumnText(
+            sessionDuration,
+            overallDistanceCovered,
+            row2
+        )
 
-        var averageSpeed = 0.0
-        if (covered != 0) {
-            averageSpeed =
-                round((duration * 1000.0) / (covered * 60.0) * 10) / 10
-        }
-
-        findViewById<TextView>(col).text =
-            String.format(
-                "%s\n%s\n%s",
-                covered,
-                row2,
-                averageSpeed
-            )
-
+        findViewById<TextView>(col).text = text
         return averageSpeed
     }
 
@@ -586,6 +621,28 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         outState.putBoolean("hasPermissions", hasPermissions)
         outState.putBoolean("started", started)
         outState.putInt("direction", direction)
+
+        outState.putBoolean("add_WP", add_WP)
+        outState.putBoolean("locationStart_exists", locationStart != null)
+        if (locationStart != null) {
+            outState.putDouble("locationStart_lat", locationStart!!.latitude)
+            outState.putDouble("locationStart_lng", locationStart!!.longitude)
+        }
+
+        outState.putBoolean("add_CP", add_CP)
+        outState.putBoolean("locationWP_exists", locationWP != null)
+        if (locationWP != null) {
+            outState.putDouble("locationWP_lat", locationWP!!.latitude)
+            outState.putDouble("locationWP_lng", locationWP!!.longitude)
+        }
+
+        outState.putBoolean("auto_add", auto_add)
+        outState.putBoolean("locationCP_exists", locationCP != null)
+        if (locationCP != null) {
+            outState.putDouble("locationCP_lat", locationCP!!.latitude)
+            outState.putDouble("locationCP_lng", locationCP!!.longitude)
+        }
+
         outState.putBoolean("WP_exists", WP != null)
         if (WP != null) {
             outState.putDouble("WP_lat", WP!!.position.latitude)
@@ -596,6 +653,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         for ((i, cp) in CP.withIndex()) {
             outState.putDouble("CP_lat_$i", cp.position.latitude)
             outState.putDouble("CP_lng_$i", cp.position.longitude)
+        }
+
+        outState.putInt("PL_size", polylines.size)
+        for ((i, latLng) in polylines.withIndex()) {
+            outState.putDouble("PL_lat_$i", latLng.latitude)
+            outState.putDouble("PL_lng_$i", latLng.longitude)
         }
 
     }
@@ -628,6 +691,28 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         started = savedInstanceState.getBoolean("started")
         direction = savedInstanceState.getInt("direction")
 
+        if (savedInstanceState.getBoolean("locationStart")) {
+            locationStart = Location("")
+            locationStart!!.longitude = savedInstanceState.getDouble("locationStart_lng")
+            locationStart!!.latitude = savedInstanceState.getDouble("locationStart_lat")
+        }
+
+        if (savedInstanceState.getBoolean("locationWP")) {
+            locationWP = Location("")
+            locationWP!!.longitude = savedInstanceState.getDouble("locationWP_lng")
+            locationWP!!.latitude = savedInstanceState.getDouble("locationWP_lat")
+        }
+
+        if (savedInstanceState.getBoolean("locationCP")) {
+            locationWP = Location("")
+            locationWP!!.longitude = savedInstanceState.getDouble("locationCP_lng")
+            locationWP!!.latitude = savedInstanceState.getDouble("locationCP_lat")
+        }
+
+        add_WP = savedInstanceState.getBoolean("add_WP")
+        add_CP = savedInstanceState.getBoolean("add_CP")
+        auto_add = savedInstanceState.getBoolean("auto_add")
+
         with(mapView) {
             // Initialise the MapView
             onCreate(savedInstanceState)
@@ -639,6 +724,19 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     map.isMyLocationEnabled = true
                 }
                 mapActions(it)
+
+                if (locationStart != null) {
+                    SP = map.addMarker(
+                        MarkerOptions().position(
+                            LatLng(
+                                locationStart!!.latitude,
+                                locationStart!!.longitude
+                            )
+                        )
+                            .title("Starting point")
+                            .icon(vectorToBitmap(R.drawable.startingpoint, 100, 150))
+                    )
+                }
 
                 if (savedInstanceState.getBoolean("WP_exists")) {
                     WP = map.addMarker(
@@ -654,7 +752,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 }
 
                 for (i in 0 until savedInstanceState.getInt("CP_size")) {
-                    CP = CP.plus(
+                    CP.add(
                         map.addMarker(
                             MarkerOptions().position(
                                 LatLng(
@@ -668,10 +766,21 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     )
                 }
 
+                for (i in 0 until savedInstanceState.getInt("PL_size")) {
+                    polylines.add(
+                        LatLng(
+                            savedInstanceState.getDouble("PL_lat_$i"),
+                            savedInstanceState.getDouble("PL_lng_$i")
+                        )
+                    )
+                    map.addPolyline(PolylineOptions().addAll(polylines))
+
+                }
+
                 // create bounds that encompass every location we reference
                 cameraFocusPosition(map)
                 setColorsAndTexts()
-                gameLoop(stateUID)
+                gameLoop(stateUID, null)
                 if (currentLocation != null) {
                     map.stopAnimation()
                     animateCamera(currentLocation, map, null)

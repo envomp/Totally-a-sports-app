@@ -1,6 +1,8 @@
 package ee.taltech.spormapsapp
 
 import android.location.Location
+import android.widget.RemoteViews
+import kotlin.math.roundToInt
 
 object StateVariables {
 
@@ -34,4 +36,44 @@ object StateVariables {
     var add_WP = false
     var add_CP = false
     var auto_add = false
+
+    fun fillColumn(
+        notifyview: RemoteViews,
+        sessionDuration: Float,
+        overallDistanceCovered: Float,
+        col: Int,
+        row2: String
+    ): Double {
+
+        val (averageSpeed, text) = getColumnText(sessionDuration, overallDistanceCovered, row2)
+
+        notifyview.setTextViewText(
+            col,
+            text
+        )
+
+        return averageSpeed
+    }
+
+    fun getColumnText(
+        sessionDuration: Float,
+        overallDistanceCovered: Float,
+        row2: String
+    ): Pair<Double, String> {
+        val duration = sessionDuration.toInt()
+        val covered = overallDistanceCovered.toInt()
+        var averageSpeed = 0.0
+        if (covered != 0) {
+            averageSpeed =
+                (((duration * 1000.0) / (overallDistanceCovered * 60.0) * 10).roundToInt() / 10).toDouble()
+        }
+
+        val text = String.format(
+            "%s\n%s\n%s",
+            "$covered m",
+            row2,
+            "$averageSpeed m/km"
+        )
+        return Pair(averageSpeed, text)
+    }
 }
