@@ -1,2 +1,0 @@
-package ee.taltech.spormapsapp
-

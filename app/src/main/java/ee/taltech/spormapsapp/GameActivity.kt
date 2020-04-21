@@ -3,8 +3,11 @@ package ee.taltech.spormapsapp
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -48,7 +51,6 @@ import ee.taltech.spormapsapp.StateVariables.WP_distance_line
 import ee.taltech.spormapsapp.StateVariables.WP_distance_overall
 import ee.taltech.spormapsapp.StateVariables.add_CP
 import ee.taltech.spormapsapp.StateVariables.add_WP
-import ee.taltech.spormapsapp.StateVariables.auto_add
 import ee.taltech.spormapsapp.StateVariables.currentLocation
 import ee.taltech.spormapsapp.StateVariables.line_distance_covered
 import ee.taltech.spormapsapp.StateVariables.locationCP
@@ -62,14 +64,13 @@ import kotlinx.android.synthetic.main.map.*
 import java.lang.Math.toDegrees
 
 
-class MainActivity : AppCompatActivity(), SensorEventListener {
+class GameActivity : AppCompatActivity(), SensorEventListener {
     companion object {
         private val TAG = this::class.java.declaringClass!!.simpleName
     }
 
     // async
     private var locationServiceActive = false
-    private var stateVariables: StateVariables = StateVariables
 
     // sensors
     lateinit var sensorManager: SensorManager
@@ -104,9 +105,17 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     var SP: Marker? = null // way points. Only one!
     var polylines: MutableList<LatLng> = mutableListOf() // path
 
+    private val broadcastReceiver = InnerBroadcastReceiver()
+    private val broadcastReceiverIntentFilter: IntentFilter = IntentFilter()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        setContentView(R.layout.activity_game)
+
+        broadcastReceiverIntentFilter.addAction(C.LOCATION_UPDATE_ACTION_LOCATION)
+        broadcastReceiverIntentFilter.addAction(C.LOCATION_UPDATE_ACTION_WP)
+        broadcastReceiverIntentFilter.addAction(C.LOCATION_UPDATE_ACTION_CP)
+        registerReceiver(broadcastReceiver, broadcastReceiverIntentFilter)
 
         // safe to call every time
         createNotificationChannel()
@@ -142,6 +151,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         wireGameButtons()
         updateVisibleText()
 
+        if (LocationService.isServiceCreated()) {
+            gameLoop(stateUID, null)
+        }
+
     }
 
     private fun addMarkersToMap() {
@@ -164,45 +177,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
     }
 
-    private fun mapActions(map: GoogleMap) {
+    private fun mapActions(
+        map: GoogleMap
+    ) {
         with(map) {
 //            moveCamera(CameraUpdateFactory.newLatLngZoom(position, 13f))
 
             mapType = GoogleMap.MAP_TYPE_TERRAIN
-            setOnMapClickListener {
-                if (add_CP) {
-                    if (currentLocation != null) {
-                        locationCP = Location(currentLocation)
-                        addCheckPoint()
-                    } else {
-                        add_CP = false
-                        Toast.makeText(
-                            this@MainActivity,
-                            "Start the game to add CP",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                    setColorsAndTexts()
-
-                }
-                if (add_WP) {
-                    if (currentLocation != null) {
-                        val location = Location(currentLocation)
-                        location.latitude = it.latitude
-                        location.longitude = it.longitude
-                        locationWP = location
-                        addWayPoint()
-                    } else {
-                        add_WP = false
-                        Toast.makeText(
-                            this@MainActivity,
-                            "Start the game to add WP",
-                            Toast.LENGTH_SHORT
-                        ).show()
-                    }
-                    setColorsAndTexts()
-                }
-            }
 
             map.setOnMyLocationButtonClickListener {
                 map.stopAnimation()
@@ -215,7 +196,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     private fun GoogleMap.addWayPoint() {
-        if (add_WP && locationWP != null) {
+        if (locationWP != null) {
             WP?.remove()
             WP = addMarker(
                 MarkerOptions().position(LatLng(locationWP!!.latitude, locationWP!!.longitude))
@@ -223,14 +204,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     .icon(vectorToBitmap(R.drawable.waypoint, 100, 150))
             )
 
-            Toast.makeText(this@MainActivity, "Added a way point", Toast.LENGTH_SHORT)
+            Toast.makeText(this@GameActivity, "Added a way point", Toast.LENGTH_SHORT)
                 .show()
             add_WP = false
         }
     }
 
     private fun GoogleMap.addCheckPoint() {
-        if (add_CP && locationCP != null) {
+        if (locationCP != null) {
             CP.add(
                 addMarker(
                     MarkerOptions().position(LatLng(locationCP!!.latitude, locationCP!!.longitude))
@@ -240,7 +221,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             )
 
             Toast.makeText(
-                this@MainActivity,
+                this@GameActivity,
                 String.format("Added a capture point nr. " + (CP.size)),
                 Toast.LENGTH_SHORT
             )
@@ -373,16 +354,47 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
         findViewById<Button>(R.id.add_wp).setBackgroundColor(resources.getColor(R.color.colorGreen))
         findViewById<Button>(R.id.add_wp).setOnClickListener {
-            add_WP = !add_WP
-            add_CP = false
+
+            if (started && currentLocation != null) {
+                val location = Location(currentLocation)
+                locationWP = location
+
+                // broadcast to service so it can be added to backend
+                val intent = Intent(C.NOTIFICATION_ACTION_WP)
+                PendingIntent.getBroadcast(this@GameActivity, 0, intent, 0).send()
+            } else {
+                add_WP = false
+                Toast.makeText(
+                    this@GameActivity,
+                    "Start the game to add WP",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
             setColorsAndTexts()
+
         }
 
         findViewById<Button>(R.id.add_cp).setBackgroundColor(resources.getColor(R.color.colorGreen))
         findViewById<Button>(R.id.add_cp).setOnClickListener {
-            add_CP = !add_CP
-            add_WP = false
+
+            if (started && currentLocation != null) {
+                locationCP = Location(currentLocation)
+
+                // broadcast to service so it can be added to backend
+                val intent = Intent(C.NOTIFICATION_ACTION_CP)
+                PendingIntent.getBroadcast(this@GameActivity, 0, intent, 0).send()
+
+            } else {
+                add_CP = false
+                Toast.makeText(
+                    this@GameActivity,
+                    "Start the game to add CP",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
             setColorsAndTexts()
+
+
         }
 
         findViewById<Button>(R.id.options).setBackgroundColor(resources.getColor(R.color.colorGreen))
@@ -420,6 +432,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                     if (locationStart == null) {
                         initializeService(lastUID) // Try again later
                     } else {
+                        map.clear()
                         SP = map.addMarker(
                             MarkerOptions().position(
                                 LatLng(
@@ -452,32 +465,29 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                         mapTransformation(currentLocation!!, map)
                     }
 
-                    if (auto_add) {
-                        if (add_CP) {
-                            map.addCheckPoint()
-                        }
+                    if (add_CP) {
+                        map.addCheckPoint()
+                    }
 
-                        if (add_WP) {
-                            map.addWayPoint()
-                        }
-                        auto_add = false
+                    if (add_WP) {
+                        map.addWayPoint()
                     }
 
 
                     if (currentLocation == null) {
                         gameLoop(lastUID, null)
                     } else {
-                        val new_location = Location(currentLocation)
-                        polylines.add(LatLng(new_location.latitude, new_location.longitude))
+                        val newLocation = Location(currentLocation)
+                        polylines.add(LatLng(newLocation.latitude, newLocation.longitude))
                         if (used_location != null) {
                             map.addPolyline(
                                 PolylineOptions().add(
                                     LatLng(used_location.latitude, used_location.longitude),
-                                    LatLng(new_location.latitude, new_location.longitude)
+                                    LatLng(newLocation.latitude, newLocation.longitude)
                                 )
                             )
                         }
-                        gameLoop(lastUID, new_location)
+                        gameLoop(lastUID, newLocation)
                     }
                 }
 
@@ -575,6 +585,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         sensorManager.unregisterListener(this, accelerometer)
         sensorManager.unregisterListener(this, magnetometer)
         Log.d(TAG, "lifecycle onStop")
+
+        // don't forget to unregister brodcast receiver!!!!
+        unregisterReceiver(broadcastReceiver)
     }
 
     override fun onDestroy() {
@@ -636,7 +649,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             outState.putDouble("locationWP_lng", locationWP!!.longitude)
         }
 
-        outState.putBoolean("auto_add", auto_add)
         outState.putBoolean("locationCP_exists", locationCP != null)
         if (locationCP != null) {
             outState.putDouble("locationCP_lat", locationCP!!.latitude)
@@ -704,14 +716,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
 
         if (savedInstanceState.getBoolean("locationCP")) {
-            locationWP = Location("")
-            locationWP!!.longitude = savedInstanceState.getDouble("locationCP_lng")
-            locationWP!!.latitude = savedInstanceState.getDouble("locationCP_lat")
+            locationCP = Location("")
+            locationCP!!.longitude = savedInstanceState.getDouble("locationCP_lng")
+            locationCP!!.latitude = savedInstanceState.getDouble("locationCP_lat")
         }
 
         add_WP = savedInstanceState.getBoolean("add_WP")
         add_CP = savedInstanceState.getBoolean("add_CP")
-        auto_add = savedInstanceState.getBoolean("auto_add")
 
         with(mapView) {
             // Initialise the MapView
@@ -898,7 +909,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             )
 
             Snackbar.make(
-                findViewById(R.id.activity_main),
+                findViewById(R.id.activity_game),
                 "Hey, I really need to access GPS!",
                 Snackbar.LENGTH_INDEFINITE
             )
@@ -945,7 +956,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
                 }
                 else -> { // Permission denied.
                     Snackbar.make(
-                        findViewById(R.id.activity_main),
+                        findViewById(R.id.activity_game),
                         "You denied GPS! What can I do?",
                         Snackbar.LENGTH_INDEFINITE
                     )
@@ -967,4 +978,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
 
     }
+
+
+    private inner class InnerBroadcastReceiver : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            Log.d(TAG, intent!!.action)
+
+        }
+    }
+
 }

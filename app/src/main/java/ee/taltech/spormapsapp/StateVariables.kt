@@ -25,6 +25,7 @@ object StateVariables {
     var WP_average_speed = 0.0
 
     // last received location
+    var oldLocation: Location? = null
     var currentLocation: Location? = null
 
     // other locations
@@ -35,7 +36,6 @@ object StateVariables {
     // doStuff
     var add_WP = false
     var add_CP = false
-    var auto_add = false
 
     fun fillColumn(
         notifyview: RemoteViews,
