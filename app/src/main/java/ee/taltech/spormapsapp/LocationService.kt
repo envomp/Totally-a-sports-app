@@ -15,6 +15,7 @@ import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
+import androidx.recyclerview.widget.LinearLayoutManager
 import com.android.volley.Request
 import com.android.volley.Response
 import com.android.volley.toolbox.JsonObjectRequest
@@ -41,6 +42,8 @@ import ee.taltech.spormapsapp.StateVariables.oldLocation
 import ee.taltech.spormapsapp.StateVariables.overall_average_speed
 import ee.taltech.spormapsapp.StateVariables.overall_distance_covered
 import ee.taltech.spormapsapp.StateVariables.session_duration
+import ee.taltech.spormapsapp.StateVariables.state_code
+import kotlinx.android.synthetic.main.activity_game.*
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.*
@@ -72,6 +75,8 @@ class LocationService : Service() {
         return true
     }
 
+    // DB
+    private lateinit var locationCategoryRepository: LocationCategoryRepository
 
     private val broadcastReceiver = InnerBroadcastReceiver()
     private val broadcastReceiverIntentFilter: IntentFilter = IntentFilter()
@@ -80,14 +85,14 @@ class LocationService : Service() {
     private lateinit var mFusedLocationClient: FusedLocationProviderClient
     private var mLocationCallback: LocationCallback? = null
 
-    private var trackingSessionId: String? = null
-
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", Locale.getDefault())
 
     override fun onCreate() {
         Log.d(TAG, "onCreate")
         super.onCreate()
         mInstance = this
+
+        locationCategoryRepository = LocationCategoryRepository(this).open()
 
         broadcastReceiverIntentFilter.addAction(C.NOTIFICATION_ACTION_CP)
         broadcastReceiverIntentFilter.addAction(C.NOTIFICATION_ACTION_WP)
@@ -127,6 +132,7 @@ class LocationService : Service() {
 
     private fun onNewLocation(location: Location) {
         Log.i(TAG, "New location: $location")
+
         if (currentLocation == null) {
             locationStart = location
         } else {
@@ -204,7 +210,7 @@ class LocationService : Service() {
             requestJsonParameters,
             Response.Listener { response ->
                 Log.d(TAG, response.toString())
-                trackingSessionId = response.getString("id")
+                state_code = response.getString("id")
             },
             Response.ErrorListener { error ->
                 Log.d(TAG, error.toString())
@@ -225,9 +231,11 @@ class LocationService : Service() {
     }
 
     fun saveRestLocation(location: Location, location_type: String) {
-        if (API.token == null || trackingSessionId == null) {
+        if (API.token == null || state_code == null) {
             return
         }
+
+        locationCategoryRepository.add(LocationCategory(location, "LOC", state_code!!))
 
         val handler = WebApiSingletonHandler.getInstance(applicationContext)
 
@@ -241,7 +249,7 @@ class LocationService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             requestJsonParameters.put("verticalAccuracy", location.verticalAccuracyMeters)
         }
-        requestJsonParameters.put("gpsSessionId", trackingSessionId)
+        requestJsonParameters.put("gpsSessionId", state_code)
         requestJsonParameters.put("gpsLocationTypeId", location_type)
 
 
@@ -274,6 +282,9 @@ class LocationService : Service() {
 
         //stop location updates
         mFusedLocationClient.removeLocationUpdates(mLocationCallback)
+
+        // close DB connection
+        locationCategoryRepository.close()
 
         // remove notifications
         NotificationManagerCompat.from(this).cancelAll()

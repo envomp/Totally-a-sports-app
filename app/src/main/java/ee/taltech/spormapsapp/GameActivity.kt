@@ -37,6 +37,7 @@ import androidx.annotation.DrawableRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.res.ResourcesCompat
+import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.GoogleMap.CancelableCallback
@@ -60,14 +61,19 @@ import ee.taltech.spormapsapp.StateVariables.overall_average_speed
 import ee.taltech.spormapsapp.StateVariables.overall_distance_covered
 import ee.taltech.spormapsapp.StateVariables.session_duration
 import ee.taltech.spormapsapp.StateVariables.stateUID
+import ee.taltech.spormapsapp.StateVariables.state_code
 import kotlinx.android.synthetic.main.map.*
 import java.lang.Math.toDegrees
+import kotlinx.android.synthetic.main.activity_game.*
 
 
 class GameActivity : AppCompatActivity(), SensorEventListener {
     companion object {
         private val TAG = this::class.java.declaringClass!!.simpleName
     }
+
+    // DB
+    private lateinit var locationCategoryRepository: LocationCategoryRepository
 
     // async
     private var locationServiceActive = false
@@ -111,6 +117,11 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_game)
+
+        locationCategoryRepository = LocationCategoryRepository(this).open()
+
+        recyclerViewCategories.layoutManager = LinearLayoutManager(this)
+        recyclerViewCategories.adapter = DataRecyclerViewAdapterCategories(this, locationCategoryRepository)
 
         broadcastReceiverIntentFilter.addAction(C.LOCATION_UPDATE_ACTION_LOCATION)
         broadcastReceiverIntentFilter.addAction(C.LOCATION_UPDATE_ACTION_WP)
@@ -204,6 +215,8 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                     .icon(vectorToBitmap(R.drawable.waypoint, 100, 150))
             )
 
+            locationCategoryRepository.add(LocationCategory(locationWP!!, "WP", state_code!!))
+
             Toast.makeText(this@GameActivity, "Added a way point", Toast.LENGTH_SHORT)
                 .show()
             add_WP = false
@@ -219,6 +232,8 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                         .icon(vectorToBitmap(R.drawable.capturepoint, 100, 150))
                 )
             )
+
+            locationCategoryRepository.add(LocationCategory(locationCP!!, "CP", state_code!!))
 
             Toast.makeText(
                 this@GameActivity,
@@ -771,7 +786,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                                     savedInstanceState.getDouble("CP_lng_$i")
                                 )
                             )
-                                .title(String.format("Capture point" + (i + 1)))
+                                .title(String.format("Capture point nr. " + (i + 1)))
                                 .icon(vectorToBitmap(R.drawable.capturepoint, 100, 150))
                         )
                     )

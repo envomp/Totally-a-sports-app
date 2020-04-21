@@ -7,6 +7,7 @@ import kotlin.math.roundToInt
 object StateVariables {
 
     var stateUID = 215761238 // helps to handle the state
+    var state_code: String? = null; // backend state
 
     // COL 1
     var overall_distance_covered = 0f // meters
