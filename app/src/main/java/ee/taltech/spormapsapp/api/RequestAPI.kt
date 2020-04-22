@@ -1,4 +1,4 @@
-package ee.taltech.spormapsapp
+package ee.taltech.spormapsapp.api
 
 class RequestAPI {
 

@@ -1,4 +1,4 @@
-package ee.taltech.spormapsapp
+package ee.taltech.spormapsapp.helper
 
 import android.location.Location
 import android.widget.RemoteViews
@@ -7,7 +7,7 @@ import kotlin.math.roundToInt
 object StateVariables {
 
     var stateUID = 215761238 // helps to handle the state
-    var state_code: String? = null; // backend state
+    var state_code: String? = null // backend state
 
     // COL 1
     var overall_distance_covered = 0f // meters
@@ -46,7 +46,11 @@ object StateVariables {
         row2: String
     ): Double {
 
-        val (averageSpeed, text) = getColumnText(sessionDuration, overallDistanceCovered, row2)
+        val (averageSpeed, text) = getColumnText(
+            sessionDuration,
+            overallDistanceCovered,
+            row2
+        )
 
         notifyview.setTextViewText(
             col,

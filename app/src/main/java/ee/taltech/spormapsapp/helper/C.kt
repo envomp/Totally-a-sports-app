@@ -1,4 +1,4 @@
-package ee.taltech.spormapsapp
+package ee.taltech.spormapsapp.helper
 
 class C {
     companion object {
@@ -7,6 +7,13 @@ class C {
         const val NOTIFICATION_ACTION_CP = "ee.taltech.spormapsapp.cp"
 
         const val LOCATION_UPDATE_ACTION = "ee.taltech.spormapsapp.location_update"
+        const val SESSION_END_ACTION = "ee.taltech.spormapsapp.session_end"
+        const val SESSION_END_TOKEN = "ee.taltech.spormapsapp.session_token"
+
+        const val DB_UPDATE = "ee.taltech.spormapsapp.db_update"
+        const val DISPLAY_SESSION = "ee.taltech.spormapsapp.session_display"
+        const val DISPLAY_SESSION_HASH = "ee.taltech.spormapsapp.session_display.hash"
+
 
         const val LOCATION_UPDATE_ACTION_LOCATION = "ee.taltech.spormapsapp.location_update.location"
         const val LOCATION_UPDATE_ACTION_WP = "ee.taltech.spormapsapp.location_update.wp"

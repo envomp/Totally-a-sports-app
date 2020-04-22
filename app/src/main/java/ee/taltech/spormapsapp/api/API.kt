@@ -1,4 +1,4 @@
-package ee.taltech.spormapsapp
+package ee.taltech.spormapsapp.api
 
 import okhttp3.*
 import java.io.IOException
@@ -64,11 +64,11 @@ object API {
         request: Request.Builder,
         callBack: KFunction2<String, Boolean, Unit>
     ) {
-        if (token != null) {
-            request.addHeader(
-                "Authorization Bearer", token!!
-            )
-        }
+//        if (token != null) {
+//            request.addHeader(
+//                "Authorization Bearer", token!!
+//            )
+//        }
 
         client.newCall(request.build()).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {

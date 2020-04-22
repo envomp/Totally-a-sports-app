@@ -1,6 +1,7 @@
 package ee.taltech.spormapsapp
 
 import android.Manifest
+import android.app.AlertDialog
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -11,6 +12,8 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.PorterDuff
 import android.graphics.drawable.Drawable
 import android.hardware.Sensor
 import android.hardware.Sensor.TYPE_ACCELEROMETER
@@ -25,46 +28,52 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.provider.Settings
+import android.text.InputType
 import android.util.Log
 import android.view.View
 import android.view.animation.Animation.RELATIVE_TO_SELF
 import android.view.animation.RotateAnimation
-import android.widget.Button
-import android.widget.ImageView
-import android.widget.TextView
-import android.widget.Toast
+import android.widget.*
 import androidx.annotation.DrawableRes
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.res.ResourcesCompat
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.GoogleMap.CancelableCallback
 import com.google.android.gms.maps.MapsInitializer
 import com.google.android.gms.maps.model.*
 import com.google.android.material.snackbar.Snackbar
-import ee.taltech.spormapsapp.StateVariables.CP_average_speed
-import ee.taltech.spormapsapp.StateVariables.CP_distance_line
-import ee.taltech.spormapsapp.StateVariables.CP_distance_overall
-import ee.taltech.spormapsapp.StateVariables.WP_average_speed
-import ee.taltech.spormapsapp.StateVariables.WP_distance_line
-import ee.taltech.spormapsapp.StateVariables.WP_distance_overall
-import ee.taltech.spormapsapp.StateVariables.add_CP
-import ee.taltech.spormapsapp.StateVariables.add_WP
-import ee.taltech.spormapsapp.StateVariables.currentLocation
-import ee.taltech.spormapsapp.StateVariables.line_distance_covered
-import ee.taltech.spormapsapp.StateVariables.locationCP
-import ee.taltech.spormapsapp.StateVariables.locationStart
-import ee.taltech.spormapsapp.StateVariables.locationWP
-import ee.taltech.spormapsapp.StateVariables.overall_average_speed
-import ee.taltech.spormapsapp.StateVariables.overall_distance_covered
-import ee.taltech.spormapsapp.StateVariables.session_duration
-import ee.taltech.spormapsapp.StateVariables.stateUID
-import ee.taltech.spormapsapp.StateVariables.state_code
+import ee.taltech.spormapsapp.api.API
+import ee.taltech.spormapsapp.db.DataRecyclerViewAdapterCategories
+import ee.taltech.spormapsapp.db.LocationCategory
+import ee.taltech.spormapsapp.db.LocationCategoryParser
+import ee.taltech.spormapsapp.db.LocationCategoryRepository
+import ee.taltech.spormapsapp.helper.C
+import ee.taltech.spormapsapp.helper.StateVariables
+import ee.taltech.spormapsapp.helper.StateVariables.CP_average_speed
+import ee.taltech.spormapsapp.helper.StateVariables.CP_distance_line
+import ee.taltech.spormapsapp.helper.StateVariables.CP_distance_overall
+import ee.taltech.spormapsapp.helper.StateVariables.WP_average_speed
+import ee.taltech.spormapsapp.helper.StateVariables.WP_distance_line
+import ee.taltech.spormapsapp.helper.StateVariables.WP_distance_overall
+import ee.taltech.spormapsapp.helper.StateVariables.add_CP
+import ee.taltech.spormapsapp.helper.StateVariables.add_WP
+import ee.taltech.spormapsapp.helper.StateVariables.currentLocation
+import ee.taltech.spormapsapp.helper.StateVariables.line_distance_covered
+import ee.taltech.spormapsapp.helper.StateVariables.locationCP
+import ee.taltech.spormapsapp.helper.StateVariables.locationStart
+import ee.taltech.spormapsapp.helper.StateVariables.locationWP
+import ee.taltech.spormapsapp.helper.StateVariables.overall_average_speed
+import ee.taltech.spormapsapp.helper.StateVariables.overall_distance_covered
+import ee.taltech.spormapsapp.helper.StateVariables.session_duration
+import ee.taltech.spormapsapp.helper.StateVariables.stateUID
+import ee.taltech.spormapsapp.helper.StateVariables.state_code
+import kotlinx.android.synthetic.main.activity_game.*
 import kotlinx.android.synthetic.main.map.*
 import java.lang.Math.toDegrees
-import kotlinx.android.synthetic.main.activity_game.*
 
 
 class GameActivity : AppCompatActivity(), SensorEventListener {
@@ -73,9 +82,11 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
     }
 
     // DB
-    private lateinit var locationCategoryRepository: LocationCategoryRepository
+    private lateinit var databaseConnector: LocationCategoryRepository
 
     // async
+    private val broadcastReceiver = InnerBroadcastReceiver()
+    private val broadcastReceiverIntentFilter: IntentFilter = IntentFilter()
     private var locationServiceActive = false
 
     // sensors
@@ -111,22 +122,19 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
     var SP: Marker? = null // way points. Only one!
     var polylines: MutableList<LatLng> = mutableListOf() // path
 
-    private val broadcastReceiver = InnerBroadcastReceiver()
-    private val broadcastReceiverIntentFilter: IntentFilter = IntentFilter()
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_game)
 
-        locationCategoryRepository = LocationCategoryRepository(this).open()
+        databaseConnector = LocationCategoryRepository(this).open()
+
+        broadcastReceiverIntentFilter.addAction(C.DB_UPDATE)
+        broadcastReceiverIntentFilter.addAction(C.DISPLAY_SESSION)
+
+        registerReceiver(broadcastReceiver, broadcastReceiverIntentFilter)
 
         recyclerViewCategories.layoutManager = LinearLayoutManager(this)
-        recyclerViewCategories.adapter = DataRecyclerViewAdapterCategories(this, locationCategoryRepository)
-
-        broadcastReceiverIntentFilter.addAction(C.LOCATION_UPDATE_ACTION_LOCATION)
-        broadcastReceiverIntentFilter.addAction(C.LOCATION_UPDATE_ACTION_WP)
-        broadcastReceiverIntentFilter.addAction(C.LOCATION_UPDATE_ACTION_CP)
-        registerReceiver(broadcastReceiver, broadcastReceiverIntentFilter)
+        recyclerViewCategories.adapter = DataRecyclerViewAdapterCategories(this, databaseConnector)
 
         // safe to call every time
         createNotificationChannel()
@@ -143,6 +151,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
             // Set the map ready callback to receive the GoogleMap object
             getMapAsync {
                 map = it
+                map.clear()
                 MapsInitializer.initialize(applicationContext)
                 if (hasPermissions) {
                     map.isMyLocationEnabled = true
@@ -151,6 +160,22 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
 
                 // create bounds that encompass every location we reference
                 cameraFocusPosition(map)
+
+                if (LocationService.isServiceCreated()) {
+
+                    started = true
+                    finishedAnimation = true
+                    locationServiceActive = true
+                    if (hasPermissions) {
+                        currentLocation = map.myLocation
+                    }
+                    stateUID = (Math.random() * 100000).toInt()
+                    drawSession(state_code!!)
+                    setColorsAndTexts()
+                    gameLoop(stateUID, null)
+
+                }
+
             }
         }
 
@@ -162,37 +187,12 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
         wireGameButtons()
         updateVisibleText()
 
-        if (LocationService.isServiceCreated()) {
-            gameLoop(stateUID, null)
-        }
-
-    }
-
-    private fun addMarkersToMap() {
-        if (WP != null) {
-            WP!!.remove()
-            map.addMarker(
-                MarkerOptions().position(WP!!.position)
-                    .title("Added a way point")
-                    .icon(vectorToBitmap(R.drawable.waypoint, 100, 150))
-            )
-        }
-
-        for (cp in CP) {
-            cp.remove()
-            map.addMarker(
-                MarkerOptions().position(cp.position)
-                    .title("Added a capture point")
-                    .icon(vectorToBitmap(R.drawable.capturepoint, 100, 150))
-            )
-        }
     }
 
     private fun mapActions(
         map: GoogleMap
     ) {
         with(map) {
-//            moveCamera(CameraUpdateFactory.newLatLngZoom(position, 13f))
 
             mapType = GoogleMap.MAP_TYPE_TERRAIN
 
@@ -209,13 +209,15 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
     private fun GoogleMap.addWayPoint() {
         if (locationWP != null) {
             WP?.remove()
-            WP = addMarker(
-                MarkerOptions().position(LatLng(locationWP!!.latitude, locationWP!!.longitude))
-                    .title("Way point")
-                    .icon(vectorToBitmap(R.drawable.waypoint, 100, 150))
-            )
+            addWayPointMarker()
 
-            locationCategoryRepository.add(LocationCategory(locationWP!!, "WP", state_code!!))
+            databaseConnector.addLocation(
+                LocationCategory(
+                    locationWP!!,
+                    "WP",
+                    state_code!!
+                )
+            )
 
             Toast.makeText(this@GameActivity, "Added a way point", Toast.LENGTH_SHORT)
                 .show()
@@ -223,17 +225,25 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
         }
     }
 
+    private fun GoogleMap.addWayPointMarker() {
+        WP = addMarker(
+            MarkerOptions().position(LatLng(locationWP!!.latitude, locationWP!!.longitude))
+                .title("Way point")
+                .icon(vectorToBitmap(R.drawable.waypoint, 100, 150))
+        )
+    }
+
     private fun GoogleMap.addCheckPoint() {
         if (locationCP != null) {
-            CP.add(
-                addMarker(
-                    MarkerOptions().position(LatLng(locationCP!!.latitude, locationCP!!.longitude))
-                        .title(String.format("Capture point nr. " + (CP.size + 1)))
-                        .icon(vectorToBitmap(R.drawable.capturepoint, 100, 150))
+            addCheckPointMarker()
+
+            databaseConnector.addLocation(
+                LocationCategory(
+                    locationCP!!,
+                    "CP",
+                    state_code!!
                 )
             )
-
-            locationCategoryRepository.add(LocationCategory(locationCP!!, "CP", state_code!!))
 
             Toast.makeText(
                 this@GameActivity,
@@ -243,6 +253,16 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                 .show()
             add_CP = false
         }
+    }
+
+    private fun GoogleMap.addCheckPointMarker() {
+        CP.add(
+            addMarker(
+                MarkerOptions().position(LatLng(locationCP!!.latitude, locationCP!!.longitude))
+                    .title(String.format("Capture point nr. " + (CP.size + 1)))
+                    .icon(vectorToBitmap(R.drawable.capturepoint, 100, 150))
+            )
+        )
     }
 
     private fun mapTransformation(
@@ -349,15 +369,76 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
             started = !started
             if (locationServiceActive) {
                 // stopping the service
+
+                val builder: AlertDialog.Builder = AlertDialog.Builder(this)
+                builder.setTitle("Please enter a name for your session")
+
+                val input = EditText(this)
+
+                input.inputType = InputType.TYPE_CLASS_TEXT
+                builder.setView(input)
+
+                builder.setPositiveButton(
+                    "Set alias"
+                ) { _, _ ->
+                    run {
+                        val session = if (state_code == null) {
+                            "No Session"
+                        } else {
+                            state_code!!
+                        }
+                        databaseConnector.addAlias(
+                            LocationCategoryParser(
+                                session,
+                                input.text.toString(),
+                                databaseConnector.getNumberOfSessionLocations(session),
+                                System.currentTimeMillis().toInt()
+                            )
+                        )
+
+                        recyclerViewCategories.adapter =
+                            DataRecyclerViewAdapterCategories(this, databaseConnector)
+                    }
+                }
+                builder.setNegativeButton(
+                    "Use existing"
+                ) { dialog, _ ->
+                    run {
+                        dialog.cancel()
+                        val session = if (state_code == null) {
+                            "No Session"
+                        } else {
+                            state_code!!
+                        }
+                        databaseConnector.addAlias(
+                            LocationCategoryParser(
+                                session,
+                                session,
+                                databaseConnector.getNumberOfSessionLocations(session),
+                                System.currentTimeMillis().toInt()
+                            )
+                        )
+
+                        recyclerViewCategories.adapter =
+                            DataRecyclerViewAdapterCategories(this, databaseConnector)
+                    }
+                }
+
+                builder.show()
+
                 stopService(Intent(this, LocationService::class.java))
 
             } else {
+                session_duration = 0.0f
                 if (Build.VERSION.SDK_INT >= 26) {
                     // starting the FOREGROUND service
                     // service has to display non-dismissable notification within 5 secs
                     startForegroundService(Intent(this, LocationService::class.java))
                 } else {
                     startService(Intent(this, LocationService::class.java))
+                    val intent = Intent(C.SESSION_END_TOKEN)
+                    intent.putExtra(C.SESSION_END_TOKEN, API.token)
+                    PendingIntent.getBroadcast(this@GameActivity, 0, intent, 0).send()
                 }
 
                 initializeService(stateUID)
@@ -409,18 +490,19 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
             }
             setColorsAndTexts()
 
-
         }
 
         findViewById<Button>(R.id.options).setBackgroundColor(resources.getColor(R.color.colorGreen))
         findViewById<Button>(R.id.options).setOnClickListener {
             is_options_toggeled = !is_options_toggeled
+            is_compass_toggeled = false
             setColorsAndTexts()
         }
 
         findViewById<Button>(R.id.compass).setBackgroundColor(resources.getColor(R.color.colorGreen))
         findViewById<Button>(R.id.compass).setOnClickListener {
             is_compass_toggeled = !is_compass_toggeled
+            is_options_toggeled = false
             setColorsAndTexts()
         }
 
@@ -448,16 +530,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                         initializeService(lastUID) // Try again later
                     } else {
                         map.clear()
-                        SP = map.addMarker(
-                            MarkerOptions().position(
-                                LatLng(
-                                    locationStart!!.latitude,
-                                    locationStart!!.longitude
-                                )
-                            )
-                                .title("Starting point")
-                                .icon(vectorToBitmap(R.drawable.startingpoint, 100, 150))
-                        )
+                        addStartingPointMarker()
                     }
                 }
             }
@@ -523,7 +596,18 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
             findViewById<ImageView>(R.id.imageViewCompass).visibility = View.VISIBLE
         } else {
             image.animation = null
-            findViewById<ImageView>(R.id.imageViewCompass).visibility = View.INVISIBLE
+            findViewById<ImageView>(R.id.imageViewCompass).visibility = View.GONE
+        }
+
+        if (is_options_toggeled) {
+            findViewById<RecyclerView>(R.id.recyclerViewCategories).visibility = View.VISIBLE
+
+            val d = resources.getDrawable(R.drawable.rectangle)
+            d.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_ATOP)
+            findViewById<RecyclerView>(R.id.recyclerViewCategories).background = d
+        } else {
+            findViewById<RecyclerView>(R.id.recyclerViewCategories).visibility = View.GONE
+            findViewById<RecyclerView>(R.id.recyclerViewCategories).background = null
         }
     }
 
@@ -601,14 +685,26 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
         sensorManager.unregisterListener(this, magnetometer)
         Log.d(TAG, "lifecycle onStop")
 
-        // don't forget to unregister brodcast receiver!!!!
-        unregisterReceiver(broadcastReceiver)
     }
 
     override fun onDestroy() {
         super.onDestroy()
         mapView.onDestroy()
+
+        // close DB connection
+        databaseConnector.close()
+
+        // don't forget to unregister brodcast receiver!!!!
+        unregisterReceiver(broadcastReceiver)
+
         Log.d(TAG, "lifecycle onDestroy")
+    }
+
+    override fun finish() {
+        super.finish()
+
+        val intent = Intent(this, LoginActivity::class.java)
+        startActivity(intent)
     }
 
     override fun onRestart() {
@@ -624,8 +720,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        Log.d(TAG, "lifecycle onRestoreInstanceState")
-
+        Log.d(TAG, "lifecycle onSaveInstanceState")
 
         outState.putFloat("overall_distance_covered", overall_distance_covered)
         outState.putFloat("line_distance_covered", line_distance_covered)
@@ -650,43 +745,8 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
         outState.putBoolean("started", started)
         outState.putInt("direction", direction)
 
-        outState.putBoolean("add_WP", add_WP)
-        outState.putBoolean("locationStart_exists", locationStart != null)
-        if (locationStart != null) {
-            outState.putDouble("locationStart_lat", locationStart!!.latitude)
-            outState.putDouble("locationStart_lng", locationStart!!.longitude)
-        }
-
-        outState.putBoolean("add_CP", add_CP)
-        outState.putBoolean("locationWP_exists", locationWP != null)
-        if (locationWP != null) {
-            outState.putDouble("locationWP_lat", locationWP!!.latitude)
-            outState.putDouble("locationWP_lng", locationWP!!.longitude)
-        }
-
-        outState.putBoolean("locationCP_exists", locationCP != null)
-        if (locationCP != null) {
-            outState.putDouble("locationCP_lat", locationCP!!.latitude)
-            outState.putDouble("locationCP_lng", locationCP!!.longitude)
-        }
-
-        outState.putBoolean("WP_exists", WP != null)
-        if (WP != null) {
-            outState.putDouble("WP_lat", WP!!.position.latitude)
-            outState.putDouble("WP_lng", WP!!.position.longitude)
-        }
-
-        outState.putInt("CP_size", CP.size)
-        for ((i, cp) in CP.withIndex()) {
-            outState.putDouble("CP_lat_$i", cp.position.latitude)
-            outState.putDouble("CP_lng_$i", cp.position.longitude)
-        }
-
-        outState.putInt("PL_size", polylines.size)
-        for ((i, latLng) in polylines.withIndex()) {
-            outState.putDouble("PL_lat_$i", latLng.latitude)
-            outState.putDouble("PL_lng_$i", latLng.longitude)
-        }
+        outState.putString("state_code", state_code)
+        outState.putString("token", API.token)
 
     }
 
@@ -718,27 +778,14 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
         started = savedInstanceState.getBoolean("started")
         direction = savedInstanceState.getInt("direction")
 
-        if (savedInstanceState.getBoolean("locationStart")) {
-            locationStart = Location("")
-            locationStart!!.longitude = savedInstanceState.getDouble("locationStart_lng")
-            locationStart!!.latitude = savedInstanceState.getDouble("locationStart_lat")
-        }
+        API.token = savedInstanceState.getString("token")
+        state_code = savedInstanceState.getString("state_code")
 
-        if (savedInstanceState.getBoolean("locationWP")) {
-            locationWP = Location("")
-            locationWP!!.longitude = savedInstanceState.getDouble("locationWP_lng")
-            locationWP!!.latitude = savedInstanceState.getDouble("locationWP_lat")
-        }
+        resumeSession(savedInstanceState)
 
-        if (savedInstanceState.getBoolean("locationCP")) {
-            locationCP = Location("")
-            locationCP!!.longitude = savedInstanceState.getDouble("locationCP_lng")
-            locationCP!!.latitude = savedInstanceState.getDouble("locationCP_lat")
-        }
+    }
 
-        add_WP = savedInstanceState.getBoolean("add_WP")
-        add_CP = savedInstanceState.getBoolean("add_CP")
-
+    private fun resumeSession(savedInstanceState: Bundle) {
         with(mapView) {
             // Initialise the MapView
             onCreate(savedInstanceState)
@@ -751,59 +798,12 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                 }
                 mapActions(it)
 
-                if (locationStart != null) {
-                    SP = map.addMarker(
-                        MarkerOptions().position(
-                            LatLng(
-                                locationStart!!.latitude,
-                                locationStart!!.longitude
-                            )
-                        )
-                            .title("Starting point")
-                            .icon(vectorToBitmap(R.drawable.startingpoint, 100, 150))
-                    )
-                }
-
-                if (savedInstanceState.getBoolean("WP_exists")) {
-                    WP = map.addMarker(
-                        MarkerOptions().position(
-                            LatLng(
-                                savedInstanceState.getDouble("WP_lat"),
-                                savedInstanceState.getDouble("WP_lng")
-                            )
-                        )
-                            .title("Way point")
-                            .icon(vectorToBitmap(R.drawable.waypoint, 100, 150))
-                    )
-                }
-
-                for (i in 0 until savedInstanceState.getInt("CP_size")) {
-                    CP.add(
-                        map.addMarker(
-                            MarkerOptions().position(
-                                LatLng(
-                                    savedInstanceState.getDouble("CP_lat_$i"),
-                                    savedInstanceState.getDouble("CP_lng_$i")
-                                )
-                            )
-                                .title(String.format("Capture point nr. " + (i + 1)))
-                                .icon(vectorToBitmap(R.drawable.capturepoint, 100, 150))
-                        )
-                    )
-                }
-
-                for (i in 0 until savedInstanceState.getInt("PL_size")) {
-                    polylines.add(
-                        LatLng(
-                            savedInstanceState.getDouble("PL_lat_$i"),
-                            savedInstanceState.getDouble("PL_lng_$i")
-                        )
-                    )
-                    map.addPolyline(PolylineOptions().addAll(polylines))
-
+                if (locationServiceActive) {
+                    drawSession(state_code!!)
                 }
 
                 // create bounds that encompass every location we reference
+
                 cameraFocusPosition(map)
                 setColorsAndTexts()
                 gameLoop(stateUID, null)
@@ -814,7 +814,19 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                 }
             }
         }
+    }
 
+    private fun addStartingPointMarker() {
+        SP = map.addMarker(
+            MarkerOptions().position(
+                LatLng(
+                    locationStart!!.latitude,
+                    locationStart!!.longitude
+                )
+            )
+                .title("Starting point")
+                .icon(vectorToBitmap(R.drawable.startingpoint, 100, 150))
+        )
     }
 
     /**
@@ -994,12 +1006,74 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
 
     }
 
-
     private inner class InnerBroadcastReceiver : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             Log.d(TAG, intent!!.action)
+            when (intent.action) {
+                C.DB_UPDATE -> {
+
+                    recyclerViewCategories.adapter =
+                        DataRecyclerViewAdapterCategories(this@GameActivity, databaseConnector)
+
+                }
+                C.DISPLAY_SESSION -> {
+
+                    if (started) {
+                        Toast.makeText(
+                            this@GameActivity,
+                            String.format("To display older sessions\nFinish the current session first!"),
+                            Toast.LENGTH_SHORT
+                        )
+                            .show()
+                    } else {
+                        val hash = intent.extras?.get(C.DISPLAY_SESSION_HASH).toString()
+
+                        session_duration = 0.0f
+                        drawSession(hash)
+
+                        finishedAnimation = false
+                        cameraFocusPosition(map)
+                        animateCamera(locationStart, map, null)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun drawSession(hash: String) {
+        map.clear()
+        CP = mutableListOf()
+        WP = null
+        SP = null
+        polylines = mutableListOf()
+
+        var lastLocation: Location? = null
+
+        for (location in databaseConnector.getAllSessionLocations(hash)) {
+            if (location.marker_type == "CP") {
+                locationCP = location.getLocation()
+                map.addCheckPointMarker()
+            }
+
+            if (location.marker_type == "WP") {
+                locationWP = location.getLocation()
+                map.addWayPointMarker()
+            }
+
+            if (lastLocation != null) {
+                polylines.add(
+                    LatLng(location.latitude, location.longitude)
+                )
+            } else {
+                locationStart = location.getLocation()
+                addStartingPointMarker()
+            }
+
+            lastLocation = location.getLocation()
 
         }
+
+        map.addPolyline(PolylineOptions().addAll(polylines))
     }
 
 }

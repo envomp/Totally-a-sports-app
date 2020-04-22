@@ -1,4 +1,4 @@
-package ee.taltech.spormapsapp
+package ee.taltech.spormapsapp.helper
 
 import android.text.TextUtils
 import android.util.Patterns

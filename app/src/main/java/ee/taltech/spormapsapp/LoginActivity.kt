@@ -10,8 +10,12 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.coordinatorlayout.widget.CoordinatorLayout
 import com.google.android.material.snackbar.Snackbar
 import com.google.gson.Gson
-import ee.taltech.spormapsapp.API.AUTH_LOGIN
-import ee.taltech.spormapsapp.API.AUTH_REGISTER
+import ee.taltech.spormapsapp.api.API
+import ee.taltech.spormapsapp.api.API.AUTH_LOGIN
+import ee.taltech.spormapsapp.api.API.AUTH_REGISTER
+import ee.taltech.spormapsapp.api.RequestAPI
+import ee.taltech.spormapsapp.api.ResponseAPI
+import ee.taltech.spormapsapp.helper.Utils
 
 
 class LoginActivity : AppCompatActivity() {
@@ -23,14 +27,13 @@ class LoginActivity : AppCompatActivity() {
     private var isLogin = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
 
         if (LocationService.isServiceCreated()) {
             val intent = Intent(this, GameActivity::class.java)
             startActivity(intent)
-            return
         }
 
-        super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_login)
 
         val mainButton = findViewById<Button>(R.id.main_button)

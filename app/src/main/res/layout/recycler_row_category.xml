@@ -6,34 +6,80 @@
     android:layout_height="wrap_content">
 
     <TextView
-        android:id="@+id/textViewId"
+        android:id="@+id/categoryHash"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
-        android:text="TextView"
+        android:text="Hash"
+        app:layout_constraintBottom_toTopOf="@+id/categoryLocations"
         app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/delete_session" />
+
+    <TextView
+        android:id="@+id/categoryLocations"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="Locations: 123"
+        app:layout_constraintBottom_toTopOf="@+id/categoryDate"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/categoryHash" />
+
+    <TextView
+        android:id="@+id/categoryDate"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:text="12.123.1231 12:13:41"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/categoryLocations" />
+
+    <Button
+        android:id="@+id/delete_session"
+        android:layout_width="45dp"
+        android:layout_height="wrap_content"
+        android:drawableStart="@drawable/ic_delete_forever_black_24dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toStartOf="@+id/rename_session"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/categoryDate" />
+
+    <Button
+        android:id="@+id/rename_session"
+        android:layout_width="45dp"
+        android:layout_height="wrap_content"
+        android:drawableStart="@drawable/baseline_filter_vintage_black_24"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toStartOf="@+id/display_session"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintStart_toEndOf="@+id/delete_session"
+        app:layout_constraintTop_toBottomOf="@+id/categoryDate"
+        app:layout_constraintVertical_bias="0.0" />
+
+    <Button
+        android:id="@+id/display_session"
+        android:layout_width="45dp"
+        android:layout_height="wrap_content"
+        android:drawableStart="@drawable/baseline_navigation_black_24"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintStart_toEndOf="@+id/rename_session"
+        app:layout_constraintTop_toBottomOf="@+id/categoryDate" />
+
+    <TextView
+        android:id="@+id/categoryTrueHash"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
-    <TextView
-        android:id="@+id/textViewName"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="TextView"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/textViewId" />
-
-    <TextView
-        android:id="@+id/textViewPriority"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:layout_marginBottom="8dp"
-        android:text="TextView"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/textViewName" />
 </androidx.constraintlayout.widget.ConstraintLayout>

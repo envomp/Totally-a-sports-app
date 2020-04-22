@@ -1,4 +1,4 @@
-package ee.taltech.spormapsapp
+package ee.taltech.spormapsapp.api
 
 import android.content.Context
 import android.text.TextUtils
@@ -16,7 +16,8 @@ class WebApiSingletonHandler {
         @Synchronized
         fun getInstance(context: Context): WebApiSingletonHandler {
             if (instance == null) {
-                instance = WebApiSingletonHandler(context)
+                instance =
+                    WebApiSingletonHandler(context)
             }
             return instance!!
         }
@@ -42,7 +43,8 @@ class WebApiSingletonHandler {
 
     fun <T> addToRequestQueue(request: Request<T>) {
         Log.d(TAG, request.url)
-        request.tag = TAG
+        request.tag =
+            TAG
         requestQueue?.add(request)
     }
 

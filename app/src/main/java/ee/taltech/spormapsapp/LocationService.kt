@@ -15,35 +15,37 @@ import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
-import androidx.recyclerview.widget.LinearLayoutManager
-import com.android.volley.Request
 import com.android.volley.Response
 import com.android.volley.toolbox.JsonObjectRequest
 import com.google.android.gms.location.*
-import com.google.android.material.snackbar.Snackbar
-import ee.taltech.spormapsapp.API.BASE_URL
-import ee.taltech.spormapsapp.API.GPS_LOCATIONS
-import ee.taltech.spormapsapp.API.GPS_SESSION
-import ee.taltech.spormapsapp.StateVariables.CP_average_speed
-import ee.taltech.spormapsapp.StateVariables.CP_distance_line
-import ee.taltech.spormapsapp.StateVariables.CP_distance_overall
-import ee.taltech.spormapsapp.StateVariables.WP_average_speed
-import ee.taltech.spormapsapp.StateVariables.WP_distance_line
-import ee.taltech.spormapsapp.StateVariables.WP_distance_overall
-import ee.taltech.spormapsapp.StateVariables.add_CP
-import ee.taltech.spormapsapp.StateVariables.add_WP
-import ee.taltech.spormapsapp.StateVariables.currentLocation
-import ee.taltech.spormapsapp.StateVariables.fillColumn
-import ee.taltech.spormapsapp.StateVariables.line_distance_covered
-import ee.taltech.spormapsapp.StateVariables.locationCP
-import ee.taltech.spormapsapp.StateVariables.locationStart
-import ee.taltech.spormapsapp.StateVariables.locationWP
-import ee.taltech.spormapsapp.StateVariables.oldLocation
-import ee.taltech.spormapsapp.StateVariables.overall_average_speed
-import ee.taltech.spormapsapp.StateVariables.overall_distance_covered
-import ee.taltech.spormapsapp.StateVariables.session_duration
-import ee.taltech.spormapsapp.StateVariables.state_code
-import kotlinx.android.synthetic.main.activity_game.*
+import ee.taltech.spormapsapp.api.API.BASE_URL
+import ee.taltech.spormapsapp.api.API.GPS_LOCATIONS
+import ee.taltech.spormapsapp.api.API.GPS_SESSION
+import ee.taltech.spormapsapp.helper.StateVariables.CP_average_speed
+import ee.taltech.spormapsapp.helper.StateVariables.CP_distance_line
+import ee.taltech.spormapsapp.helper.StateVariables.CP_distance_overall
+import ee.taltech.spormapsapp.helper.StateVariables.WP_average_speed
+import ee.taltech.spormapsapp.helper.StateVariables.WP_distance_line
+import ee.taltech.spormapsapp.helper.StateVariables.WP_distance_overall
+import ee.taltech.spormapsapp.helper.StateVariables.add_CP
+import ee.taltech.spormapsapp.helper.StateVariables.add_WP
+import ee.taltech.spormapsapp.helper.StateVariables.currentLocation
+import ee.taltech.spormapsapp.helper.StateVariables.fillColumn
+import ee.taltech.spormapsapp.helper.StateVariables.line_distance_covered
+import ee.taltech.spormapsapp.helper.StateVariables.locationCP
+import ee.taltech.spormapsapp.helper.StateVariables.locationStart
+import ee.taltech.spormapsapp.helper.StateVariables.locationWP
+import ee.taltech.spormapsapp.helper.StateVariables.oldLocation
+import ee.taltech.spormapsapp.helper.StateVariables.overall_average_speed
+import ee.taltech.spormapsapp.helper.StateVariables.overall_distance_covered
+import ee.taltech.spormapsapp.helper.StateVariables.session_duration
+import ee.taltech.spormapsapp.helper.StateVariables.state_code
+import ee.taltech.spormapsapp.api.API
+import ee.taltech.spormapsapp.api.WebApiSingletonHandler
+import ee.taltech.spormapsapp.db.LocationCategory
+import ee.taltech.spormapsapp.db.LocationCategoryParser
+import ee.taltech.spormapsapp.db.LocationCategoryRepository
+import ee.taltech.spormapsapp.helper.C
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.*
@@ -76,7 +78,7 @@ class LocationService : Service() {
     }
 
     // DB
-    private lateinit var locationCategoryRepository: LocationCategoryRepository
+    private lateinit var databaseConnector: LocationCategoryRepository
 
     private val broadcastReceiver = InnerBroadcastReceiver()
     private val broadcastReceiverIntentFilter: IntentFilter = IntentFilter()
@@ -87,16 +89,22 @@ class LocationService : Service() {
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", Locale.getDefault())
 
+    var token: String? = null
+
     override fun onCreate() {
         Log.d(TAG, "onCreate")
         super.onCreate()
         mInstance = this
 
-        locationCategoryRepository = LocationCategoryRepository(this).open()
+        token = API.token
+
+        databaseConnector = LocationCategoryRepository(this).open()
 
         broadcastReceiverIntentFilter.addAction(C.NOTIFICATION_ACTION_CP)
         broadcastReceiverIntentFilter.addAction(C.NOTIFICATION_ACTION_WP)
         broadcastReceiverIntentFilter.addAction(C.LOCATION_UPDATE_ACTION)
+        broadcastReceiverIntentFilter.addAction(C.SESSION_END_TOKEN)
+
         registerReceiver(broadcastReceiver, broadcastReceiverIntentFilter)
         mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
@@ -202,6 +210,8 @@ class LocationService : Service() {
         val requestJsonParameters = JSONObject()
         requestJsonParameters.put("name", "envomp " + Date().toString())
         requestJsonParameters.put("description", "envomp " + Date().toString())
+        requestJsonParameters.put("paceMin", 60)
+        requestJsonParameters.put("paceMax", 18 * 60)
 
 
         val httpRequest = object : JsonObjectRequest(
@@ -221,7 +231,15 @@ class LocationService : Service() {
                 for ((key, value) in super.getHeaders()) {
                     headers[key] = value
                 }
-                headers["Authorization"] = "Bearer " + API.token!!
+
+                if (token == null) {
+                    token = API.token
+                }
+
+                if (token != null) {
+                    headers["Authorization"] = "Bearer " + token!!
+                }
+
                 return headers
             }
         }
@@ -231,11 +249,17 @@ class LocationService : Service() {
     }
 
     fun saveRestLocation(location: Location, location_type: String) {
-        if (API.token == null || state_code == null) {
+        if (token == null || state_code == null) {
             return
         }
 
-        locationCategoryRepository.add(LocationCategory(location, "LOC", state_code!!))
+        databaseConnector.addLocation(
+            LocationCategory(
+                location,
+                "LOC",
+                state_code!!
+            )
+        )
 
         val handler = WebApiSingletonHandler.getInstance(applicationContext)
 
@@ -269,7 +293,7 @@ class LocationService : Service() {
                 for ((key, value) in super.getHeaders()) {
                     headers[key] = value
                 }
-                headers["Authorization"] = "Bearer " + API.token!!
+                headers["Authorization"] = "Bearer " + token!!
                 return headers
             }
         }
@@ -284,7 +308,7 @@ class LocationService : Service() {
         mFusedLocationClient.removeLocationUpdates(mLocationCallback)
 
         // close DB connection
-        locationCategoryRepository.close()
+        databaseConnector.close()
 
         // remove notifications
         NotificationManagerCompat.from(this).cancelAll()
@@ -400,7 +424,6 @@ class LocationService : Service() {
 
     private inner class InnerBroadcastReceiver : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            Log.d(TAG, "Do backend call")
             Log.d(TAG, intent!!.action)
             when (intent.action) {
                 C.NOTIFICATION_ACTION_WP -> {
@@ -435,6 +458,12 @@ class LocationService : Service() {
 
                     saveRestLocation(locationCP!!, API.REST_LOCATION_ID_CP)
                     showNotification()
+
+                }
+
+                C.SESSION_END_TOKEN -> {
+
+                    token = intent.extras?.get(C.SESSION_END_TOKEN).toString()
 
                 }
             }
