@@ -40,6 +40,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.res.ResourcesCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+//import com.edmodo.rangebar.RangeBar
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.GoogleMap.CancelableCallback
@@ -48,8 +49,7 @@ import com.google.android.gms.maps.model.*
 import com.google.android.material.snackbar.Snackbar
 import ee.taltech.spormapsapp.api.API
 import ee.taltech.spormapsapp.db.DataRecyclerViewAdapterCategories
-import ee.taltech.spormapsapp.db.LocationCategory
-import ee.taltech.spormapsapp.db.LocationCategoryParser
+import ee.taltech.spormapsapp.db.LocationAlias
 import ee.taltech.spormapsapp.db.LocationCategoryRepository
 import ee.taltech.spormapsapp.helper.C
 import ee.taltech.spormapsapp.helper.StateVariables
@@ -73,6 +73,8 @@ import ee.taltech.spormapsapp.helper.StateVariables.stateUID
 import ee.taltech.spormapsapp.helper.StateVariables.state_code
 import kotlinx.android.synthetic.main.activity_game.*
 import kotlinx.android.synthetic.main.map.*
+import kotlinx.android.synthetic.main.options.*
+import org.w3c.dom.Text
 import java.lang.Math.toDegrees
 
 
@@ -105,10 +107,10 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
 
     // Header
     private var direction = 0
-    private val direction_map: HashMap<Int, String> =
+    private val directionMap: HashMap<Int, String> =
         hashMapOf(0 to "CENTERED", 1 to "NORTH-UP", 2 to "DIRECTION-UP", 3 to "CHOSEN-UP")
-    private var is_compass_toggeled = false
-    private var is_options_toggeled = false
+    private var isCompassToggeled = false
+    private var isOptionsToggeled = false
 
     // Dynamic modifiers
     private var hasPermissions = false
@@ -121,6 +123,9 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
     var WP: Marker? = null // way points. Only one!
     var SP: Marker? = null // way points. Only one!
     var polylines: MutableList<LatLng> = mutableListOf() // path
+
+    var minGradient = 0
+    var maxGradient = 30
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -202,7 +207,6 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                 finishedAnimation = false
                 true
             }
-
         }
     }
 
@@ -210,14 +214,6 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
         if (locationWP != null) {
             WP?.remove()
             addWayPointMarker()
-
-            databaseConnector.addLocation(
-                LocationCategory(
-                    locationWP!!,
-                    "WP",
-                    state_code!!
-                )
-            )
 
             Toast.makeText(this@GameActivity, "Added a way point", Toast.LENGTH_SHORT)
                 .show()
@@ -236,14 +232,6 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
     private fun GoogleMap.addCheckPoint() {
         if (locationCP != null) {
             addCheckPointMarker()
-
-            databaseConnector.addLocation(
-                LocationCategory(
-                    locationCP!!,
-                    "CP",
-                    state_code!!
-                )
-            )
 
             Toast.makeText(
                 this@GameActivity,
@@ -271,7 +259,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
     ) {
         if (locationServiceActive) {
 
-            if (is_compass_toggeled) {
+            if (isCompassToggeled) {
                 location.bearing = actualDegree
             }
 
@@ -366,7 +354,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
     private fun wireGameButtons() {
         findViewById<Button>(R.id.start_or_stop).setBackgroundColor(resources.getColor(R.color.colorGreen))
         findViewById<Button>(R.id.start_or_stop).setOnClickListener {
-            started = !started
+
             if (locationServiceActive) {
                 // stopping the service
 
@@ -379,7 +367,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                 builder.setView(input)
 
                 builder.setPositiveButton(
-                    "Set alias"
+                    "Use custom alias"
                 ) { _, _ ->
                     run {
                         val session = if (state_code == null) {
@@ -387,49 +375,43 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                         } else {
                             state_code!!
                         }
-                        databaseConnector.addAlias(
-                            LocationCategoryParser(
-                                session,
-                                input.text.toString(),
-                                databaseConnector.getNumberOfSessionLocations(session),
-                                System.currentTimeMillis().toInt()
-                            )
-                        )
 
-                        recyclerViewCategories.adapter =
-                            DataRecyclerViewAdapterCategories(this, databaseConnector)
+                        shutServiceDown(session, input.text.toString())
                     }
                 }
+
                 builder.setNegativeButton(
-                    "Use existing"
+                    "Use Existing"
                 ) { dialog, _ ->
                     run {
                         dialog.cancel()
+
                         val session = if (state_code == null) {
                             "No Session"
                         } else {
                             state_code!!
                         }
-                        databaseConnector.addAlias(
-                            LocationCategoryParser(
-                                session,
-                                session,
-                                databaseConnector.getNumberOfSessionLocations(session),
-                                System.currentTimeMillis().toInt()
-                            )
-                        )
 
-                        recyclerViewCategories.adapter =
-                            DataRecyclerViewAdapterCategories(this, databaseConnector)
+                        shutServiceDown(session, session)
+
+                    }
+                }
+
+                builder.setNeutralButton(
+                    "Cancel"
+                ) { dialog, _ ->
+                    run {
+                        started = !started
+                        locationServiceActive = !locationServiceActive
+                        dialog.cancel()
+                        setColorsAndTexts()
                     }
                 }
 
                 builder.show()
 
-                stopService(Intent(this, LocationService::class.java))
-
             } else {
-                session_duration = 0.0f
+
                 if (Build.VERSION.SDK_INT >= 26) {
                     // starting the FOREGROUND service
                     // service has to display non-dismissable notification within 5 secs
@@ -442,10 +424,11 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                 }
 
                 initializeService(stateUID)
+                gameLoop(stateUID, null)
             }
+            started = !started
             locationServiceActive = !locationServiceActive
             setColorsAndTexts()
-            gameLoop(stateUID, null)
         }
 
         findViewById<Button>(R.id.add_wp).setBackgroundColor(resources.getColor(R.color.colorGreen))
@@ -494,15 +477,15 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
 
         findViewById<Button>(R.id.options).setBackgroundColor(resources.getColor(R.color.colorGreen))
         findViewById<Button>(R.id.options).setOnClickListener {
-            is_options_toggeled = !is_options_toggeled
-            is_compass_toggeled = false
+            isOptionsToggeled = !isOptionsToggeled
+            isCompassToggeled = false
             setColorsAndTexts()
         }
 
         findViewById<Button>(R.id.compass).setBackgroundColor(resources.getColor(R.color.colorGreen))
         findViewById<Button>(R.id.compass).setOnClickListener {
-            is_compass_toggeled = !is_compass_toggeled
-            is_options_toggeled = false
+            isCompassToggeled = !isCompassToggeled
+            isOptionsToggeled = false
             setColorsAndTexts()
         }
 
@@ -520,6 +503,44 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                 100 // value in milliseconds
             )
         }
+
+//        val bar = findViewById<RangeBar>(R.id.gradientRangeBar)
+//        bar.setTickCount(30)
+//        bar.setTickHeight(0f)
+//
+//        bar.setOnRangeBarChangeListener { _, i, i2 ->
+//            run {
+//                barLeft.text = i.toString()
+//                barRight.text = i2.toString()
+//
+//                minGradient = i
+//                maxGradient = i2
+//            }
+//        }
+    }
+
+    private fun shutServiceDown(
+        session: String,
+        alias: String
+    ) {
+        databaseConnector.addAlias(
+            LocationAlias(
+                session,
+                alias,
+                databaseConnector.getNumberOfSessionLocations(session),
+                System.currentTimeMillis().toString()
+            )
+        )
+
+        recyclerViewCategories.adapter =
+            DataRecyclerViewAdapterCategories(this, databaseConnector)
+
+        stopService(Intent(this, LocationService::class.java))
+
+        StateVariables.hardReset()
+        updateVisibleText()
+        setColorsAndTexts()
+
     }
 
     private fun initializeService(lastUID: Int) {
@@ -586,29 +607,37 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
 
     private fun setColorsAndTexts() {
         findViewById<Button>(R.id.start_or_stop).text = if (started) "STOP" else "START"
-        findViewById<Button>(R.id.position).text = direction_map[direction]
+        findViewById<Button>(R.id.position).text = directionMap[direction]
         findViewById<Button>(R.id.start_or_stop).setBackgroundColor(resources.getColor(if (started) R.color.colorGreener else R.color.colorGreen))
         findViewById<Button>(R.id.add_wp).setBackgroundColor(resources.getColor(if (add_WP) R.color.colorGreener else R.color.colorGreen))
         findViewById<Button>(R.id.add_cp).setBackgroundColor(resources.getColor(if (add_CP) R.color.colorGreener else R.color.colorGreen))
-        findViewById<Button>(R.id.options).setBackgroundColor(resources.getColor(if (is_options_toggeled) R.color.colorGreener else R.color.colorGreen))
-        findViewById<Button>(R.id.compass).setBackgroundColor(resources.getColor(if (is_compass_toggeled) R.color.colorGreener else R.color.colorGreen))
-        if (is_compass_toggeled) {
+        findViewById<Button>(R.id.options).setBackgroundColor(resources.getColor(if (isOptionsToggeled) R.color.colorGreener else R.color.colorGreen))
+        findViewById<Button>(R.id.compass).setBackgroundColor(resources.getColor(if (isCompassToggeled) R.color.colorGreener else R.color.colorGreen))
+
+        if (isCompassToggeled) {
             findViewById<ImageView>(R.id.imageViewCompass).visibility = View.VISIBLE
         } else {
             image.animation = null
             findViewById<ImageView>(R.id.imageViewCompass).visibility = View.GONE
         }
 
-        if (is_options_toggeled) {
-            findViewById<RecyclerView>(R.id.recyclerViewCategories).visibility = View.VISIBLE
+        if (isOptionsToggeled) {
+            findViewById<View>(R.id.options_drawer).visibility = View.VISIBLE
 
             val d = resources.getDrawable(R.drawable.rectangle)
             d.setColorFilter(Color.WHITE, PorterDuff.Mode.SRC_ATOP)
-            findViewById<RecyclerView>(R.id.recyclerViewCategories).background = d
+            findViewById<View>(R.id.options_drawer).background = d
         } else {
-            findViewById<RecyclerView>(R.id.recyclerViewCategories).visibility = View.GONE
-            findViewById<RecyclerView>(R.id.recyclerViewCategories).background = null
+            findViewById<View>(R.id.options_drawer).visibility = View.GONE
+            findViewById<View>(R.id.options_drawer).background = null
         }
+
+//        if (started) {
+//            findViewById<View>(R.id.position).visibility = View.VISIBLE
+//        } else {
+//            findViewById<View>(R.id.position).visibility = View.GONE
+//        }
+
     }
 
     private fun updateVisibleText() {
@@ -646,7 +675,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
         overallDistanceCovered: Float,
         col: Int,
         row2: String
-    ): Double {
+    ): Int {
 
         val (averageSpeed, text) = StateVariables.getColumnText(
             sessionDuration,
@@ -725,22 +754,22 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
         outState.putFloat("overall_distance_covered", overall_distance_covered)
         outState.putFloat("line_distance_covered", line_distance_covered)
         outState.putFloat("session_duration", session_duration)
-        outState.putDouble("overall_average_speed", overall_average_speed)
+        outState.putInt("overall_average_speed", overall_average_speed)
 
         outState.putFloat("CP_distance_overall", CP_distance_overall)
         outState.putFloat("CP_distance_line", CP_distance_line)
-        outState.putDouble("CP_average_speed", CP_average_speed)
+        outState.putInt("CP_average_speed", CP_average_speed)
 
         outState.putFloat("WP_distance_overall", WP_distance_overall)
         outState.putFloat("WP_distance_line", WP_distance_line)
-        outState.putDouble("WP_average_speed", WP_average_speed)
+        outState.putInt("WP_average_speed", WP_average_speed)
 
         outState.putBoolean("locationServiceActive", locationServiceActive)
 
         outState.putFloat("currentDegree", currentDegree)
         outState.putFloat("actualDegree ", actualDegree)
-        outState.putBoolean("is_compass_toggeled", is_compass_toggeled)
-        outState.putBoolean("is_options_toggeled", is_options_toggeled)
+        outState.putBoolean("is_compass_toggeled", isCompassToggeled)
+        outState.putBoolean("is_options_toggeled", isOptionsToggeled)
         outState.putBoolean("hasPermissions", hasPermissions)
         outState.putBoolean("started", started)
         outState.putInt("direction", direction)
@@ -758,22 +787,22 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
         overall_distance_covered = savedInstanceState.getFloat("overall_distance_covered")
         line_distance_covered = savedInstanceState.getFloat("line_distance_covered")
         session_duration = savedInstanceState.getFloat("session_duration")
-        overall_average_speed = savedInstanceState.getDouble("overall_average_speed")
+        overall_average_speed = savedInstanceState.getInt("overall_average_speed")
 
         CP_distance_overall = savedInstanceState.getFloat("CP_distance_overall")
         CP_distance_line = savedInstanceState.getFloat("CP_distance_line")
-        CP_average_speed = savedInstanceState.getDouble("CP_average_speed")
+        CP_average_speed = savedInstanceState.getInt("CP_average_speed")
 
         WP_distance_overall = savedInstanceState.getFloat("WP_distance_overall")
         WP_distance_line = savedInstanceState.getFloat("WP_distance_line")
-        WP_average_speed = savedInstanceState.getDouble("WP_average_speed")
+        WP_average_speed = savedInstanceState.getInt("WP_average_speed")
 
         locationServiceActive = savedInstanceState.getBoolean("locationServiceActive")
 
         currentDegree = savedInstanceState.getFloat("currentDegree")
         actualDegree = savedInstanceState.getFloat("actualDegree")
-        is_compass_toggeled = savedInstanceState.getBoolean("is_compass_toggeled")
-        is_options_toggeled = savedInstanceState.getBoolean("is_options_toggeled")
+        isCompassToggeled = savedInstanceState.getBoolean("is_compass_toggeled")
+        isOptionsToggeled = savedInstanceState.getBoolean("is_options_toggeled")
         hasPermissions = savedInstanceState.getBoolean("hasPermissions")
         started = savedInstanceState.getBoolean("started")
         direction = savedInstanceState.getInt("direction")
@@ -861,7 +890,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
     }
 
     private fun doCompassThings() {
-        if (lastAccelerometerSet && lastMagnetometerSet && is_compass_toggeled) {
+        if (lastAccelerometerSet && lastMagnetometerSet && isCompassToggeled) {
             val r = FloatArray(9)
             if (SensorManager.getRotationMatrix(r, null, lastAccelerometer, lastMagnetometer)) {
                 val orientation = FloatArray(3)
@@ -1026,10 +1055,10 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                         )
                             .show()
                     } else {
-                        val hash = intent.extras?.get(C.DISPLAY_SESSION_HASH).toString()
+                        val hash = intent.getStringExtra(C.DISPLAY_SESSION_HASH)
 
                         session_duration = 0.0f
-                        drawSession(hash)
+                        drawSession(hash!!)
 
                         finishedAnimation = false
                         cameraFocusPosition(map)

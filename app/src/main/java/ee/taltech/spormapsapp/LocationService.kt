@@ -43,7 +43,6 @@ import ee.taltech.spormapsapp.helper.StateVariables.state_code
 import ee.taltech.spormapsapp.api.API
 import ee.taltech.spormapsapp.api.WebApiSingletonHandler
 import ee.taltech.spormapsapp.db.LocationCategory
-import ee.taltech.spormapsapp.db.LocationCategoryParser
 import ee.taltech.spormapsapp.db.LocationCategoryRepository
 import ee.taltech.spormapsapp.helper.C
 import org.json.JSONObject
@@ -141,6 +140,10 @@ class LocationService : Service() {
     private fun onNewLocation(location: Location) {
         Log.i(TAG, "New location: $location")
 
+        if (currentLocation != null && location.distanceTo(currentLocation) < 1.0f || (location.hasAccuracy() && location.accuracy > 100)) {
+            return
+        }
+
         if (currentLocation == null) {
             locationStart = location
         } else {
@@ -148,14 +151,14 @@ class LocationService : Service() {
             overall_distance_covered += location.distanceTo(currentLocation)
 
             if (locationCP == null) {
-                CP_distance_line = -1.0f;
+                CP_distance_line = -1.0f
             } else {
                 CP_distance_line = location.distanceTo(locationCP)
                 CP_distance_overall += location.distanceTo(currentLocation)
             }
 
             if (locationWP == null) {
-                WP_distance_line = -1.0f;
+                WP_distance_line = -1.0f
             } else {
                 WP_distance_line = location.distanceTo(locationWP)
                 WP_distance_overall += location.distanceTo(currentLocation)
@@ -320,6 +323,8 @@ class LocationService : Service() {
         val intent = Intent(C.LOCATION_UPDATE_ACTION)
         LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
 
+        mInstance = null
+
     }
 
     override fun onLowMemory() {
@@ -440,6 +445,15 @@ class LocationService : Service() {
                         .sendBroadcast(intent)
 
                     saveRestLocation(locationWP!!, API.REST_LOCATION_ID_WP)
+
+                    databaseConnector.addLocation(
+                        LocationCategory(
+                            locationWP!!,
+                            "WP",
+                            state_code!!
+                        )
+                    )
+
                     showNotification()
 
                 }
@@ -457,6 +471,15 @@ class LocationService : Service() {
                         .sendBroadcast(intent)
 
                     saveRestLocation(locationCP!!, API.REST_LOCATION_ID_CP)
+
+                    databaseConnector.addLocation(
+                        LocationCategory(
+                            locationCP!!,
+                            "CP",
+                            state_code!!
+                        )
+                    )
+
                     showNotification()
 
                 }

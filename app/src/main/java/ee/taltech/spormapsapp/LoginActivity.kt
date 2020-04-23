@@ -16,6 +16,7 @@ import ee.taltech.spormapsapp.api.API.AUTH_REGISTER
 import ee.taltech.spormapsapp.api.RequestAPI
 import ee.taltech.spormapsapp.api.ResponseAPI
 import ee.taltech.spormapsapp.helper.Utils
+import kotlin.system.exitProcess
 
 
 class LoginActivity : AppCompatActivity() {
@@ -41,6 +42,14 @@ class LoginActivity : AppCompatActivity() {
 
         mainButton.setOnClickListener { mainButtonClicked() }
         secondaryButton.setOnClickListener { secondaryButtonClicked() }
+    }
+
+
+    override fun finish() {
+        super.finish()
+//
+//        moveTaskToBack(true);
+//        exitProcess(-1)
     }
 
     private fun mainButtonClicked() {

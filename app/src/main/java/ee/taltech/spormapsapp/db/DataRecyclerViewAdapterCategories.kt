@@ -21,7 +21,9 @@ import ee.taltech.spormapsapp.helper.C
 import ee.taltech.spormapsapp.helper.StateVariables
 import kotlinx.android.synthetic.main.recycler_row_category.view.*
 import kotlinx.android.synthetic.main.recycler_row_category.view.categoryTrueHash
+import java.lang.Math.abs
 import java.sql.Date
+import kotlin.random.Random
 
 
 class DataRecyclerViewAdapterCategories(
@@ -30,7 +32,7 @@ class DataRecyclerViewAdapterCategories(
 ) : RecyclerView.Adapter<DataRecyclerViewAdapterCategories.ViewHolder>() {
 
     //    private var locations: List<LocationCategory> = repo.getAllLocations()
-    private var aliases: List<LocationCategoryParser> = repo.getAllAliases()
+    private var aliases: List<LocationAlias> = repo.getAllAliases()
     private val inflater: LayoutInflater = LayoutInflater.from(context)
 
 
@@ -76,7 +78,7 @@ class DataRecyclerViewAdapterCategories(
                     itemView.findViewById<TextView>(R.id.categoryTrueHash).text.toString()
                 val intent = Intent(C.DISPLAY_SESSION)
                 intent.putExtra(C.DISPLAY_SESSION_HASH, categoryTrueHash)
-                PendingIntent.getBroadcast(context, 0, intent, 0).send()
+                PendingIntent.getBroadcast(context, 0, intent, Random.nextInt(0, 1000)).send()
             }
 
             itemView.findViewById<Button>(R.id.rename_session).setOnClickListener {

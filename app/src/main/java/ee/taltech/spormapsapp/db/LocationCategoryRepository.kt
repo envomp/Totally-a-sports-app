@@ -36,7 +36,7 @@ class LocationCategoryRepository(val context: Context) {
         db.insert(DbHelper.CATEGORY_TABLE_NAME, null, values)
     }
 
-    fun addAlias(LocationCategoryParser: LocationCategoryParser) {
+    fun addAlias(LocationCategoryParser: LocationAlias) {
         val values = ContentValues()
         values.put(DbHelper.ALIAS_SESSION, LocationCategoryParser.hash)
         values.put(DbHelper.ALIAS_ALIAS, LocationCategoryParser.alias)
@@ -196,17 +196,17 @@ class LocationCategoryRepository(val context: Context) {
         return count
     }
 
-    fun getAllAliases(): List<LocationCategoryParser> {
-        val aliases = ArrayList<LocationCategoryParser>()
+    fun getAllAliases(): List<LocationAlias> {
+        val aliases = ArrayList<LocationAlias>()
         val cursor = fetchAliases()
 
         while (cursor.moveToNext()) {
             aliases.add(
-                LocationCategoryParser(
+                LocationAlias(
                     cursor.getString(cursor.getColumnIndex(DbHelper.ALIAS_SESSION)),
                     cursor.getString(cursor.getColumnIndex(DbHelper.ALIAS_ALIAS)),
                     cursor.getInt(cursor.getColumnIndex(DbHelper.ALIAS_LOCATIONS)),
-                    cursor.getInt(cursor.getColumnIndex(DbHelper.ALIAS_FIRST_DATE))
+                    cursor.getString(cursor.getColumnIndex(DbHelper.ALIAS_FIRST_DATE))
                 )
             )
         }

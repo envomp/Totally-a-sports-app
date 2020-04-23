@@ -10,7 +10,7 @@
         android:layout_width="200dp"
         android:layout_height="0dp"
         android:drawableStart="@drawable/ic_gps_fixed_black_24dp"
-        android:paddingLeft="48px"
+        android:paddingStart="8dp"
         android:text="north-up"
         app:layout_constraintBottom_toTopOf="@+id/compass"
         app:layout_constraintStart_toStartOf="parent"
@@ -21,7 +21,7 @@
         android:layout_width="200dp"
         android:layout_height="0dp"
         android:drawableStart="@drawable/compass"
-        android:paddingLeft="48px"
+        android:paddingStart="8dp"
         android:text="compass"
         app:layout_constraintBottom_toTopOf="@+id/options"
         app:layout_constraintStart_toStartOf="parent"
@@ -32,8 +32,9 @@
         android:layout_width="200dp"
         android:layout_height="0dp"
         android:drawableStart="@drawable/ic_settings_black_24dp"
-        android:paddingLeft="48px"
+        android:paddingStart="8dp"
         android:text="Options"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/compass" />
+
 </androidx.constraintlayout.widget.ConstraintLayout>
