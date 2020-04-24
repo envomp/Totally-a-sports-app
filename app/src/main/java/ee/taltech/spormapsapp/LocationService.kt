@@ -14,7 +14,6 @@ import android.util.Log
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.android.volley.Response
 import com.android.volley.toolbox.JsonObjectRequest
 import com.google.android.gms.location.*
@@ -27,8 +26,6 @@ import ee.taltech.spormapsapp.helper.StateVariables.CP_distance_overall
 import ee.taltech.spormapsapp.helper.StateVariables.WP_average_speed
 import ee.taltech.spormapsapp.helper.StateVariables.WP_distance_line
 import ee.taltech.spormapsapp.helper.StateVariables.WP_distance_overall
-import ee.taltech.spormapsapp.helper.StateVariables.add_CP
-import ee.taltech.spormapsapp.helper.StateVariables.add_WP
 import ee.taltech.spormapsapp.helper.StateVariables.currentLocation
 import ee.taltech.spormapsapp.helper.StateVariables.fillColumn
 import ee.taltech.spormapsapp.helper.StateVariables.line_distance_covered
@@ -45,19 +42,18 @@ import ee.taltech.spormapsapp.api.WebApiSingletonHandler
 import ee.taltech.spormapsapp.db.LocationCategory
 import ee.taltech.spormapsapp.db.LocationCategoryRepository
 import ee.taltech.spormapsapp.helper.C
+import ee.taltech.spormapsapp.helper.StateVariables
+import ee.taltech.spormapsapp.helper.StateVariables.sync_interval
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlin.random.Random
 
 
 class LocationService : Service() {
 
     companion object {
         private val TAG = this::class.java.declaringClass!!.simpleName
-
-        // The desired intervals for location updates. Inexact. Updates may be more or less frequent.
-        const val UPDATE_INTERVAL_IN_MILLISECONDS: Long = 2000
-        const val FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS = UPDATE_INTERVAL_IN_MILLISECONDS / 2
 
         private var mInstance: LocationService? = null
 
@@ -96,13 +92,14 @@ class LocationService : Service() {
         mInstance = this
 
         token = API.token
+        currentLocation = locationStart
 
         databaseConnector = LocationCategoryRepository(this).open()
 
         broadcastReceiverIntentFilter.addAction(C.NOTIFICATION_ACTION_CP)
         broadcastReceiverIntentFilter.addAction(C.NOTIFICATION_ACTION_WP)
         broadcastReceiverIntentFilter.addAction(C.LOCATION_UPDATE_ACTION)
-        broadcastReceiverIntentFilter.addAction(C.SESSION_END_TOKEN)
+        broadcastReceiverIntentFilter.addAction(C.SESSION_TOKEN)
 
         registerReceiver(broadcastReceiver, broadcastReceiverIntentFilter)
         mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
@@ -138,11 +135,12 @@ class LocationService : Service() {
     }
 
     private fun onNewLocation(location: Location) {
-        Log.i(TAG, "New location: $location")
 
         if (currentLocation != null && location.distanceTo(currentLocation) < 1.0f || (location.hasAccuracy() && location.accuracy > 100)) {
             return
         }
+
+        Log.i(TAG, "New location: $location")
 
         if (currentLocation == null) {
             locationStart = location
@@ -177,16 +175,18 @@ class LocationService : Service() {
 
         // broadcast new location to UI
         val intent = Intent(C.LOCATION_UPDATE_ACTION)
-        intent.putExtra(C.LOCATION_UPDATE_ACTION_LOCATION, location)
-        LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
+        intent.putExtra(C.LOCATION_UPDATE_ACTION_LOCATION_OLD, oldLocation)
+        intent.putExtra(C.LOCATION_UPDATE_ACTION_LOCATION, currentLocation)
+        PendingIntent.getBroadcast(mInstance, 0, intent, Random.nextInt(0, 1000)).send()
 
     }
 
     private fun createLocationRequest() {
-        mLocationRequest.interval = UPDATE_INTERVAL_IN_MILLISECONDS
-        mLocationRequest.fastestInterval = FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS
+
+        mLocationRequest.interval = sync_interval
+        mLocationRequest.fastestInterval = sync_interval / 2
         mLocationRequest.priority = LocationRequest.PRIORITY_HIGH_ACCURACY
-        mLocationRequest.maxWaitTime = UPDATE_INTERVAL_IN_MILLISECONDS
+        mLocationRequest.maxWaitTime = sync_interval
     }
 
     private fun getLastLocation() {
@@ -216,7 +216,6 @@ class LocationService : Service() {
         requestJsonParameters.put("paceMin", 60)
         requestJsonParameters.put("paceMax", 18 * 60)
 
-
         val httpRequest = object : JsonObjectRequest(
             Method.POST,
             BASE_URL + GPS_SESSION,
@@ -224,9 +223,25 @@ class LocationService : Service() {
             Response.Listener { response ->
                 Log.d(TAG, response.toString())
                 state_code = response.getString("id")
+
+                saveRestLocation(locationStart!!, API.REST_LOCATION_ID_LOC)
+
+                databaseConnector.addLocation(
+                    LocationCategory(
+                        locationStart!!,
+                        "LOC",
+                        state_code!!
+                    )
+                )
+
+                val intent = Intent(C.SESSION_START_ACTION)
+                intent.putExtra(C.DISPLAY_SESSION_HASH, state_code)
+                PendingIntent.getBroadcast(this, 0, intent, Random.nextInt(0, 1000)).send()
             },
-            Response.ErrorListener { error ->
-                Log.d(TAG, error.toString())
+            Response.ErrorListener { _ ->
+                // broadcast start to UI
+                val intent = Intent(C.SESSION_START_FAILED)
+                PendingIntent.getBroadcast(this, 0, intent, Random.nextInt(0, 1000)).send()
             }
         ) {
             override fun getHeaders(): MutableMap<String, String> {
@@ -247,8 +262,7 @@ class LocationService : Service() {
             }
         }
 
-
-        handler.addToRequestQueue(httpRequest)
+        handler.addToRequestQueue(httpRequest, false)
     }
 
     fun saveRestLocation(location: Location, location_type: String) {
@@ -280,7 +294,15 @@ class LocationService : Service() {
         requestJsonParameters.put("gpsLocationTypeId", location_type)
 
 
-        val httpRequest = object : JsonObjectRequest(
+        val httpRequest = getJsonObjectRequest(requestJsonParameters)
+        handler.addToRequestQueue(httpRequest, true)
+
+    }
+
+    private fun getJsonObjectRequest(
+        requestJsonParameters: JSONObject
+    ): JsonObjectRequest {
+        return object : JsonObjectRequest(
             Method.POST,
             BASE_URL + GPS_LOCATIONS,
             requestJsonParameters,
@@ -300,7 +322,6 @@ class LocationService : Service() {
                 return headers
             }
         }
-        handler.addToRequestQueue(httpRequest)
     }
 
     override fun onDestroy() {
@@ -320,8 +341,8 @@ class LocationService : Service() {
         unregisterReceiver(broadcastReceiver)
 
         // broadcast stop to UI
-        val intent = Intent(C.LOCATION_UPDATE_ACTION)
-        LocalBroadcastManager.getInstance(this).sendBroadcast(intent)
+        val intent = Intent(C.SESSION_END_ACTION)
+        PendingIntent.getBroadcast(mInstance, 0, intent, Random.nextInt(0, 1000)).send()
 
         mInstance = null
 
@@ -332,32 +353,19 @@ class LocationService : Service() {
         super.onLowMemory()
     }
 
+    override fun onBind(intent: Intent?): IBinder? {
+        TODO("Not yet implemented")
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "onStartCommand")
 
-        // set counters and locations to 0/null
-        currentLocation = null
-        locationStart = null
-        locationCP = null
-        locationWP = null
-
-        line_distance_covered = 0f
-        overall_distance_covered = 0f
-        CP_distance_line = 0f
-        CP_distance_overall = 0f
-        WP_distance_line = 0f
-        WP_distance_overall = 0f
-
+        StateVariables.hardReset()
 
         showNotification()
 
         return START_STICKY
         //return super.onStartCommand(intent, flags, startId)
-    }
-
-    override fun onBind(intent: Intent?): IBinder? {
-        Log.d(TAG, "onBind")
-        TODO("not implemented")
     }
 
     override fun onRebind(intent: Intent?) {
@@ -430,19 +438,19 @@ class LocationService : Service() {
     private inner class InnerBroadcastReceiver : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             Log.d(TAG, intent!!.action)
+
             when (intent.action) {
                 C.NOTIFICATION_ACTION_WP -> {
 
-                    locationWP = currentLocation
-                    add_WP = true
+                    locationWP = Location(currentLocation)
+
                     WP_distance_line = 0f
                     WP_distance_overall = 0f
 
                     // broadcast new location to UI
                     val intent = Intent(C.LOCATION_UPDATE_ACTION_WP)
                     intent.putExtra(C.LOCATION_UPDATE_ACTION_WP, locationWP)
-                    LocalBroadcastManager.getInstance(mInstance!!.applicationContext)
-                        .sendBroadcast(intent)
+                    PendingIntent.getBroadcast(mInstance, 0, intent, Random.nextInt(0, 1000)).send()
 
                     saveRestLocation(locationWP!!, API.REST_LOCATION_ID_WP)
 
@@ -459,16 +467,15 @@ class LocationService : Service() {
                 }
                 C.NOTIFICATION_ACTION_CP -> {
 
-                    locationCP = currentLocation
-                    add_CP = true
+                    locationCP = Location(currentLocation)
+
                     CP_distance_line = 0f
                     CP_distance_overall = 0f
 
                     // broadcast new location to UI
                     val intent = Intent(C.LOCATION_UPDATE_ACTION_CP)
                     intent.putExtra(C.LOCATION_UPDATE_ACTION_CP, locationCP)
-                    LocalBroadcastManager.getInstance(mInstance!!.applicationContext)
-                        .sendBroadcast(intent)
+                    PendingIntent.getBroadcast(mInstance, 0, intent, Random.nextInt(0, 1000)).send()
 
                     saveRestLocation(locationCP!!, API.REST_LOCATION_ID_CP)
 
@@ -484,9 +491,9 @@ class LocationService : Service() {
 
                 }
 
-                C.SESSION_END_TOKEN -> {
+                C.SESSION_TOKEN -> {
 
-                    token = intent.extras?.get(C.SESSION_END_TOKEN).toString()
+                    token = intent.extras?.get(C.SESSION_TOKEN).toString()
 
                 }
             }

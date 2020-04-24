@@ -51,7 +51,6 @@ class DataRecyclerViewAdapterCategories(
         holder.itemView.categoryTrueHash.text = category.hash
         holder.itemView.categoryHash.text = "Name: ${category.alias}"
         holder.itemView.categoryLocations.text = "Locations: ${category.locations}"
-        println(category.firstDate)
         holder.itemView.categoryDate.text =
             "Date: ${Date((category.firstDate).toLong())}"
     }

@@ -11,6 +11,7 @@ object StateVariables {
 
     var stateUID = 215761238 // helps to handle the state
     var state_code: String? = null // backend state
+    var sync_interval: Long = 2000
 
     // COL 1
     var overall_distance_covered = 0f // meters
@@ -37,14 +38,11 @@ object StateVariables {
     var locationCP: Location? = null
     var locationWP: Location? = null
 
-    // doStuff
-    var add_WP = false
-    var add_CP = false
-
 
     fun hardReset() {
         stateUID = Random.nextInt()
         state_code = null
+        sync_interval = 2000L
         overall_distance_covered = 0f
         line_distance_covered = 0f
         session_duration = 0f
@@ -60,8 +58,6 @@ object StateVariables {
         locationStart = null
         locationCP = null
         locationWP = null
-        add_WP = false
-        add_CP = false
     }
 
     fun fillColumn(
@@ -88,8 +84,8 @@ object StateVariables {
         val covered = overallDistanceCovered.toInt()
         var averageSpeed = 0
         if (covered != 0) {
-            averageSpeed =
-                (((duration * 1000.0) / (overallDistanceCovered * 60.0)).roundToInt())
+            averageSpeed = (overallDistanceCovered / duration).roundToInt()
+
         }
 
         val speedText = if (averageSpeed < 1 || averageSpeed > 99) {
@@ -102,7 +98,7 @@ object StateVariables {
             "%s\n%s\n%s",
             "$covered m",
             row2,
-            "$speedText m/km"
+            "$speedText m/s"
         )
         return Pair(averageSpeed, text)
     }

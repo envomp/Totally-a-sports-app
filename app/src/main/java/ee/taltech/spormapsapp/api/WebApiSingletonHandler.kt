@@ -1,11 +1,13 @@
 package ee.taltech.spormapsapp.api
 
 import android.content.Context
+import android.os.Handler
 import android.text.TextUtils
 import android.util.Log
-import com.android.volley.Request
 import com.android.volley.RequestQueue
+import com.android.volley.toolbox.JsonObjectRequest
 import com.android.volley.toolbox.Volley
+
 
 class WebApiSingletonHandler {
     companion object {
@@ -35,17 +37,28 @@ class WebApiSingletonHandler {
             return field
         }
 
-    fun <T> addToRequestQueue(request: Request<T>, tag: String) {
+    fun addToRequestQueue(request: JsonObjectRequest, b: Boolean) {
         Log.d(TAG, request.url)
-        request.tag = if (TextUtils.isEmpty(tag)) TAG else tag
+        request.tag = TAG
         requestQueue?.add(request)
+        if (b) {
+            customRetryPolicy(request, 100)
+        }
     }
 
-    fun <T> addToRequestQueue(request: Request<T>) {
-        Log.d(TAG, request.url)
-        request.tag =
-            TAG
-        requestQueue?.add(request)
+    private fun customRetryPolicy(
+        request: JsonObjectRequest,
+        i: Int
+    ) {
+        Handler().postDelayed(
+            {
+                if (!request.hasHadResponseDelivered() && i != 0) {
+                    requestQueue?.add(request)
+                    customRetryPolicy(request, i - 1)
+                }
+            },
+            3000 // value in milliseconds
+        )
     }
 
     fun cancelPendingRequest(tag: String) {

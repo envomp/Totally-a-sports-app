@@ -7,21 +7,22 @@
 
     <TextView
         android:id="@+id/categoryHash"
-        android:layout_width="0dp"
+        android:layout_width="168dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="4dp"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="16dp"
         android:layout_marginEnd="4dp"
         android:text="Hash"
         app:layout_constraintBottom_toTopOf="@+id/categoryLocations"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.5"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/categoryTrueHash" />
+        app:layout_constraintTop_toBottomOf="@+id/categoryTrueHash"
+        app:layout_constraintVertical_chainStyle="spread_inside" />
 
     <TextView
         android:id="@+id/categoryLocations"
-        android:layout_width="0dp"
+        android:layout_width="168dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="4dp"
         android:layout_marginEnd="4dp"
@@ -34,7 +35,7 @@
 
     <TextView
         android:id="@+id/categoryDate"
-        android:layout_width="0dp"
+        android:layout_width="168dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="4dp"
         android:layout_marginEnd="4dp"
@@ -54,6 +55,7 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toStartOf="@+id/rename_session"
         app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintHorizontal_chainStyle="packed"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/categoryDate" />
 
@@ -61,6 +63,8 @@
         android:id="@+id/rename_session"
         android:layout_width="45dp"
         android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
         android:drawableStart="@drawable/baseline_filter_vintage_black_24"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toStartOf="@+id/display_session"
@@ -83,12 +87,7 @@
     <TextView
         android:id="@+id/categoryTrueHash"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:visibility="gone"
-        app:layout_constraintBottom_toTopOf="@+id/categoryHash"
-        app:layout_constraintEnd_toEndOf="@+id/categoryHash"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/delete_session"
-        app:layout_constraintTop_toTopOf="parent" />
+        android:layout_height="1dp"
+        android:visibility="visible" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

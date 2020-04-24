@@ -39,8 +39,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.res.ResourcesCompat
 import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
-//import com.edmodo.rangebar.RangeBar
+import com.edmodo.rangebar.RangeBar
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.GoogleMap.CancelableCallback
@@ -50,6 +49,7 @@ import com.google.android.material.snackbar.Snackbar
 import ee.taltech.spormapsapp.api.API
 import ee.taltech.spormapsapp.db.DataRecyclerViewAdapterCategories
 import ee.taltech.spormapsapp.db.LocationAlias
+import ee.taltech.spormapsapp.db.LocationCategory
 import ee.taltech.spormapsapp.db.LocationCategoryRepository
 import ee.taltech.spormapsapp.helper.C
 import ee.taltech.spormapsapp.helper.StateVariables
@@ -59,8 +59,6 @@ import ee.taltech.spormapsapp.helper.StateVariables.CP_distance_overall
 import ee.taltech.spormapsapp.helper.StateVariables.WP_average_speed
 import ee.taltech.spormapsapp.helper.StateVariables.WP_distance_line
 import ee.taltech.spormapsapp.helper.StateVariables.WP_distance_overall
-import ee.taltech.spormapsapp.helper.StateVariables.add_CP
-import ee.taltech.spormapsapp.helper.StateVariables.add_WP
 import ee.taltech.spormapsapp.helper.StateVariables.currentLocation
 import ee.taltech.spormapsapp.helper.StateVariables.line_distance_covered
 import ee.taltech.spormapsapp.helper.StateVariables.locationCP
@@ -71,11 +69,13 @@ import ee.taltech.spormapsapp.helper.StateVariables.overall_distance_covered
 import ee.taltech.spormapsapp.helper.StateVariables.session_duration
 import ee.taltech.spormapsapp.helper.StateVariables.stateUID
 import ee.taltech.spormapsapp.helper.StateVariables.state_code
-import kotlinx.android.synthetic.main.activity_game.*
+import ee.taltech.spormapsapp.helper.StateVariables.sync_interval
 import kotlinx.android.synthetic.main.map.*
 import kotlinx.android.synthetic.main.options.*
-import org.w3c.dom.Text
-import java.lang.Math.toDegrees
+import java.lang.Exception
+import java.lang.Math.*
+import kotlin.collections.HashMap
+import kotlin.random.Random.Default.nextInt
 
 
 class GameActivity : AppCompatActivity(), SensorEventListener {
@@ -109,23 +109,23 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
     private var direction = 0
     private val directionMap: HashMap<Int, String> =
         hashMapOf(0 to "CENTERED", 1 to "NORTH-UP", 2 to "DIRECTION-UP", 3 to "CHOSEN-UP")
-    private var isCompassToggeled = false
-    private var isOptionsToggeled = false
+    private var isCompassToggled = false
+    private var isOptionsToggled = false
 
     // Dynamic modifiers
     private var hasPermissions = false
     private var started = false
 
     // map
-    var finishedAnimation = true
+    private var finishedAnimation = true
     private lateinit var map: GoogleMap
-    var CP: MutableList<Marker> = mutableListOf() // capture points
-    var WP: Marker? = null // way points. Only one!
-    var SP: Marker? = null // way points. Only one!
-    var polylines: MutableList<LatLng> = mutableListOf() // path
+    private var CP: MutableList<Marker> = mutableListOf() // capture points
+    private var WP: Marker? = null // way points. Only one!
+    private var SP: Marker? = null // way points. Only one!
+    private var polylines: MutableList<LocationCategory> = mutableListOf() // path
 
-    var minGradient = 0
-    var maxGradient = 30
+    private var minGradient = 0.0
+    private var maxGradient = 30.0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -133,8 +133,15 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
 
         databaseConnector = LocationCategoryRepository(this).open()
 
+        broadcastReceiverIntentFilter.addAction(C.LOCATION_UPDATE_ACTION)
+        broadcastReceiverIntentFilter.addAction(C.SESSION_START_ACTION)
+        broadcastReceiverIntentFilter.addAction(C.SESSION_END_ACTION)
+        broadcastReceiverIntentFilter.addAction(C.SESSION_START_FAILED)
         broadcastReceiverIntentFilter.addAction(C.DB_UPDATE)
         broadcastReceiverIntentFilter.addAction(C.DISPLAY_SESSION)
+        broadcastReceiverIntentFilter.addAction(C.LOCATION_UPDATE_ACTION_WP)
+        broadcastReceiverIntentFilter.addAction(C.LOCATION_UPDATE_ACTION_CP)
+
 
         registerReceiver(broadcastReceiver, broadcastReceiverIntentFilter)
 
@@ -168,19 +175,23 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
 
                 if (LocationService.isServiceCreated()) {
 
-                    started = true
-                    finishedAnimation = true
-                    locationServiceActive = true
-                    if (hasPermissions) {
-                        currentLocation = map.myLocation
+                    try {
+                        started = true
+                        locationServiceActive = true
+                        if (hasPermissions) {
+                            currentLocation = map.myLocation
+                        }
+                        drawSession(state_code!!)
+                        startGameLoop()
+                    } catch (e: Exception) {
+                        started = false
+                        locationServiceActive = false
+                        stopService(Intent(this@GameActivity, LocationService::class.java))
+                        StateVariables.hardReset()
+                        updateVisibleText()
+                        setColorsAndTexts()
                     }
-                    stateUID = (Math.random() * 100000).toInt()
-                    drawSession(state_code!!)
-                    setColorsAndTexts()
-                    gameLoop(stateUID, null)
-
                 }
-
             }
         }
 
@@ -204,7 +215,6 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
             map.setOnMyLocationButtonClickListener {
                 map.stopAnimation()
                 animateCamera(currentLocation, map, null)
-                finishedAnimation = false
                 true
             }
         }
@@ -217,7 +227,6 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
 
             Toast.makeText(this@GameActivity, "Added a way point", Toast.LENGTH_SHORT)
                 .show()
-            add_WP = false
         }
     }
 
@@ -239,7 +248,6 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                 Toast.LENGTH_SHORT
             )
                 .show()
-            add_CP = false
         }
     }
 
@@ -259,7 +267,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
     ) {
         if (locationServiceActive) {
 
-            if (isCompassToggeled) {
+            if (isCompassToggled) {
                 location.bearing = actualDegree
             }
 
@@ -317,118 +325,134 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
         bearing: Float?
     ) {
 
-        val oldPos: CameraPosition = map.cameraPosition
+        if (finishedAnimation) {
+            val oldPos: CameraPosition = map.cameraPosition
 
-        val pos = CameraPosition.builder(oldPos)
-            .zoom(
-                map.cameraPosition.zoom.coerceAtLeast(
-                    14f
+            val pos = CameraPosition.builder(oldPos)
+                .zoom(
+                    map.cameraPosition.zoom.coerceAtLeast(
+                        14f
+                    )
                 )
-            )
 
-        if (location != null) {
-            pos.target(
-                LatLng(
-                    location.latitude,
-                    location.longitude
+            if (location != null) {
+                pos.target(
+                    LatLng(
+                        location.latitude,
+                        location.longitude
+                    )
                 )
-            )
+            }
+
+            if (bearing != null) {
+                pos.bearing(bearing)
+            }
+
+            finishedAnimation = false
+            map.animateCamera(CameraUpdateFactory.newCameraPosition(pos.build()),
+                object : CancelableCallback {
+                    override fun onFinish() {
+                        finishedAnimation = true
+                    }
+
+                    override fun onCancel() {
+                        finishedAnimation = true
+                    }
+                })
         }
-
-        if (bearing != null) {
-            pos.bearing(bearing)
-        }
-
-        map.animateCamera(CameraUpdateFactory.newCameraPosition(pos.build()),
-            object : CancelableCallback {
-                override fun onFinish() {
-                    finishedAnimation = true
-                }
-
-                override fun onCancel() {
-                    finishedAnimation = true
-                }
-            })
     }
 
     private fun wireGameButtons() {
         findViewById<Button>(R.id.start_or_stop).setBackgroundColor(resources.getColor(R.color.colorGreen))
         findViewById<Button>(R.id.start_or_stop).setOnClickListener {
-
-            if (locationServiceActive) {
-                // stopping the service
-
-                val builder: AlertDialog.Builder = AlertDialog.Builder(this)
-                builder.setTitle("Please enter a name for your session")
-
-                val input = EditText(this)
-
-                input.inputType = InputType.TYPE_CLASS_TEXT
-                builder.setView(input)
-
-                builder.setPositiveButton(
-                    "Use custom alias"
-                ) { _, _ ->
-                    run {
-                        val session = if (state_code == null) {
-                            "No Session"
-                        } else {
-                            state_code!!
-                        }
-
-                        shutServiceDown(session, input.text.toString())
-                    }
-                }
-
-                builder.setNegativeButton(
-                    "Use Existing"
-                ) { dialog, _ ->
-                    run {
-                        dialog.cancel()
-
-                        val session = if (state_code == null) {
-                            "No Session"
-                        } else {
-                            state_code!!
-                        }
-
-                        shutServiceDown(session, session)
-
-                    }
-                }
-
-                builder.setNeutralButton(
-                    "Cancel"
-                ) { dialog, _ ->
-                    run {
-                        started = !started
-                        locationServiceActive = !locationServiceActive
-                        dialog.cancel()
-                        setColorsAndTexts()
-                    }
-                }
-
-                builder.show()
-
+            if (!hasPermissions) {
+                Toast.makeText(
+                    this@GameActivity,
+                    "Can't track you without permissions!",
+                    Toast.LENGTH_SHORT
+                ).show()
             } else {
+                if (locationServiceActive) {
+                    // stopping the service
 
-                if (Build.VERSION.SDK_INT >= 26) {
-                    // starting the FOREGROUND service
-                    // service has to display non-dismissable notification within 5 secs
-                    startForegroundService(Intent(this, LocationService::class.java))
+                    val builder: AlertDialog.Builder = AlertDialog.Builder(this)
+                    builder.setTitle("Please enter a name for your session")
+
+                    val input = EditText(this)
+
+                    input.inputType = InputType.TYPE_CLASS_TEXT
+                    builder.setView(input)
+
+                    builder.setPositiveButton(
+                        "Use custom alias"
+                    ) { _, _ ->
+                        run {
+                            val session = if (state_code == null) {
+                                "No Session"
+                            } else {
+                                state_code!!
+                            }
+
+                            shutServiceDown(session, input.text.toString())
+                            started = false
+                        }
+                    }
+
+                    builder.setNegativeButton(
+                        "Use Existing"
+                    ) { dialog, _ ->
+                        run {
+                            dialog.cancel()
+
+                            val session = if (state_code == null) {
+                                "No Session"
+                            } else {
+                                state_code!!
+                            }
+
+                            shutServiceDown(session, session)
+                            started = false
+                        }
+                    }
+
+                    builder.setNeutralButton(
+                        "Cancel"
+                    ) { dialog, _ ->
+                        run {
+                            dialog.cancel()
+                            setColorsAndTexts()
+                        }
+                    }
+
+                    builder.show()
+
                 } else {
-                    startService(Intent(this, LocationService::class.java))
-                    val intent = Intent(C.SESSION_END_TOKEN)
-                    intent.putExtra(C.SESSION_END_TOKEN, API.token)
-                    PendingIntent.getBroadcast(this@GameActivity, 0, intent, 0).send()
-                }
+                    val interval =
+                        findViewById<EditText>(R.id.syncInterval).text.toString().toLongOrNull()
 
-                initializeService(stateUID)
-                gameLoop(stateUID, null)
+                    if (interval != null) {
+                        sync_interval = kotlin.math.max(interval, 1) * 1000
+                    } else {
+                        sync_interval = 2000
+                    }
+
+                    locationStart = map.myLocation
+                    if (Build.VERSION.SDK_INT >= 26) {
+                        // starting the FOREGROUND service
+                        // service has to display non-dismissable notification within 5 secs
+                        startForegroundService(Intent(this, LocationService::class.java))
+                    } else {
+                        startService(Intent(this, LocationService::class.java))
+                        val intent = Intent(C.SESSION_TOKEN)
+                        intent.putExtra(C.SESSION_TOKEN, API.token)
+                        PendingIntent.getBroadcast(this@GameActivity, 0, intent, nextInt(0, 1000))
+                            .send()
+                    }
+
+                    started = true
+                }
+                setColorsAndTexts()
             }
-            started = !started
-            locationServiceActive = !locationServiceActive
-            setColorsAndTexts()
         }
 
         findViewById<Button>(R.id.add_wp).setBackgroundColor(resources.getColor(R.color.colorGreen))
@@ -442,7 +466,6 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                 val intent = Intent(C.NOTIFICATION_ACTION_WP)
                 PendingIntent.getBroadcast(this@GameActivity, 0, intent, 0).send()
             } else {
-                add_WP = false
                 Toast.makeText(
                     this@GameActivity,
                     "Start the game to add WP",
@@ -464,7 +487,6 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                 PendingIntent.getBroadcast(this@GameActivity, 0, intent, 0).send()
 
             } else {
-                add_CP = false
                 Toast.makeText(
                     this@GameActivity,
                     "Start the game to add CP",
@@ -477,15 +499,15 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
 
         findViewById<Button>(R.id.options).setBackgroundColor(resources.getColor(R.color.colorGreen))
         findViewById<Button>(R.id.options).setOnClickListener {
-            isOptionsToggeled = !isOptionsToggeled
-            isCompassToggeled = false
+            isOptionsToggled = !isOptionsToggled
+            isCompassToggled = false
             setColorsAndTexts()
         }
 
         findViewById<Button>(R.id.compass).setBackgroundColor(resources.getColor(R.color.colorGreen))
         findViewById<Button>(R.id.compass).setOnClickListener {
-            isCompassToggeled = !isCompassToggeled
-            isOptionsToggeled = false
+            isCompassToggled = !isCompassToggled
+            isOptionsToggled = false
             setColorsAndTexts()
         }
 
@@ -504,19 +526,19 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
             )
         }
 
-//        val bar = findViewById<RangeBar>(R.id.gradientRangeBar)
-//        bar.setTickCount(30)
-//        bar.setTickHeight(0f)
-//
-//        bar.setOnRangeBarChangeListener { _, i, i2 ->
-//            run {
-//                barLeft.text = i.toString()
-//                barRight.text = i2.toString()
-//
-//                minGradient = i
-//                maxGradient = i2
-//            }
-//        }
+        val bar = findViewById<RangeBar>(R.id.gradientRangeBar)
+        bar.setTickCount(30)
+        bar.setTickHeight(0f)
+
+        bar.setOnRangeBarChangeListener { _, i, i2 ->
+            run {
+                barLeft.text = i.toString()
+                barRight.text = i2.toString()
+
+                minGradient = i.toDouble()
+                maxGradient = i2.toDouble()
+            }
+        }
     }
 
     private fun shutServiceDown(
@@ -543,61 +565,21 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
 
     }
 
-    private fun initializeService(lastUID: Int) {
-        Handler().postDelayed(
-            {
-                if (hasPermissions && locationServiceActive && started && lastUID == stateUID) {
-                    if (locationStart == null) {
-                        initializeService(lastUID) // Try again later
-                    } else {
-                        map.clear()
-                        addStartingPointMarker()
-                    }
-                }
-            }
-            ,
-            100 // value in milliseconds
-        )
-    }
-
-    private fun gameLoop(lastUID: Int, used_location: Location?) {
+    private fun gameLoop(lastUID: Int) {
         Handler().postDelayed(
             {
 
-                if (started && lastUID == stateUID) {
+                if (lastUID == stateUID) {
 
                     session_duration += 0.1f
                     updateVisibleText()
 
-                    if (currentLocation != null && finishedAnimation) {
-                        finishedAnimation = false
+                    if (hasPermissions && currentLocation != null) {
                         mapTransformation(currentLocation!!, map)
                     }
 
-                    if (add_CP) {
-                        map.addCheckPoint()
-                    }
+                    gameLoop(lastUID)
 
-                    if (add_WP) {
-                        map.addWayPoint()
-                    }
-
-
-                    if (currentLocation == null) {
-                        gameLoop(lastUID, null)
-                    } else {
-                        val newLocation = Location(currentLocation)
-                        polylines.add(LatLng(newLocation.latitude, newLocation.longitude))
-                        if (used_location != null) {
-                            map.addPolyline(
-                                PolylineOptions().add(
-                                    LatLng(used_location.latitude, used_location.longitude),
-                                    LatLng(newLocation.latitude, newLocation.longitude)
-                                )
-                            )
-                        }
-                        gameLoop(lastUID, newLocation)
-                    }
                 }
 
             },
@@ -605,23 +587,43 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
         )
     }
 
+    private fun getTrackColor(used_location: Location?, new_location: Location): Int {
+        var color = 0.0
+
+        if (used_location != null && used_location.distanceTo(new_location) > 0.1f) {
+            color =
+                (used_location.distanceTo(new_location)) / ((new_location.time - used_location.time).toDouble() / 1000)
+        }
+
+        color = min(color - minGradient, maxGradient - minGradient) / (maxGradient - minGradient)
+
+        return (0xff000000 + (color * 255).toInt() * pow(16.0, 4.0).toInt()).toInt()
+    }
+
     private fun setColorsAndTexts() {
-        findViewById<Button>(R.id.start_or_stop).text = if (started) "STOP" else "START"
+        findViewById<Button>(R.id.start_or_stop).text =
+            if (started && locationServiceActive) {
+                "STOP"
+            } else if (started) {
+                "PENDING"
+            } else {
+                "START"
+            }
         findViewById<Button>(R.id.position).text = directionMap[direction]
         findViewById<Button>(R.id.start_or_stop).setBackgroundColor(resources.getColor(if (started) R.color.colorGreener else R.color.colorGreen))
-        findViewById<Button>(R.id.add_wp).setBackgroundColor(resources.getColor(if (add_WP) R.color.colorGreener else R.color.colorGreen))
-        findViewById<Button>(R.id.add_cp).setBackgroundColor(resources.getColor(if (add_CP) R.color.colorGreener else R.color.colorGreen))
-        findViewById<Button>(R.id.options).setBackgroundColor(resources.getColor(if (isOptionsToggeled) R.color.colorGreener else R.color.colorGreen))
-        findViewById<Button>(R.id.compass).setBackgroundColor(resources.getColor(if (isCompassToggeled) R.color.colorGreener else R.color.colorGreen))
+        findViewById<Button>(R.id.add_wp).setBackgroundColor(resources.getColor(R.color.colorGreen))
+        findViewById<Button>(R.id.add_cp).setBackgroundColor(resources.getColor(R.color.colorGreen))
+        findViewById<Button>(R.id.options).setBackgroundColor(resources.getColor(if (isOptionsToggled) R.color.colorGreener else R.color.colorGreen))
+        findViewById<Button>(R.id.compass).setBackgroundColor(resources.getColor(if (isCompassToggled) R.color.colorGreener else R.color.colorGreen))
 
-        if (isCompassToggeled) {
+        if (isCompassToggled) {
             findViewById<ImageView>(R.id.imageViewCompass).visibility = View.VISIBLE
         } else {
             image.animation = null
             findViewById<ImageView>(R.id.imageViewCompass).visibility = View.GONE
         }
 
-        if (isOptionsToggeled) {
+        if (isOptionsToggled) {
             findViewById<View>(R.id.options_drawer).visibility = View.VISIBLE
 
             val d = resources.getDrawable(R.drawable.rectangle)
@@ -632,11 +634,11 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
             findViewById<View>(R.id.options_drawer).background = null
         }
 
-//        if (started) {
-//            findViewById<View>(R.id.position).visibility = View.VISIBLE
-//        } else {
-//            findViewById<View>(R.id.position).visibility = View.GONE
-//        }
+        if (started) {
+            findViewById<View>(R.id.position).visibility = View.VISIBLE
+        } else {
+            findViewById<View>(R.id.position).visibility = View.GONE
+        }
 
     }
 
@@ -768,8 +770,8 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
 
         outState.putFloat("currentDegree", currentDegree)
         outState.putFloat("actualDegree ", actualDegree)
-        outState.putBoolean("is_compass_toggeled", isCompassToggeled)
-        outState.putBoolean("is_options_toggeled", isOptionsToggeled)
+        outState.putBoolean("is_compass_toggeled", isCompassToggled)
+        outState.putBoolean("is_options_toggeled", isOptionsToggled)
         outState.putBoolean("hasPermissions", hasPermissions)
         outState.putBoolean("started", started)
         outState.putInt("direction", direction)
@@ -782,7 +784,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
     override fun onRestoreInstanceState(savedInstanceState: Bundle) {
         super.onRestoreInstanceState(savedInstanceState)
         Log.d(TAG, "lifecycle onRestoreInstanceState")
-        stateUID = (Math.random() * 100000).toInt()
+        stateUID = (random() * 100000).toInt()
 
         overall_distance_covered = savedInstanceState.getFloat("overall_distance_covered")
         line_distance_covered = savedInstanceState.getFloat("line_distance_covered")
@@ -801,14 +803,16 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
 
         currentDegree = savedInstanceState.getFloat("currentDegree")
         actualDegree = savedInstanceState.getFloat("actualDegree")
-        isCompassToggeled = savedInstanceState.getBoolean("is_compass_toggeled")
-        isOptionsToggeled = savedInstanceState.getBoolean("is_options_toggeled")
+        isCompassToggled = savedInstanceState.getBoolean("is_compass_toggeled")
+        isOptionsToggled = savedInstanceState.getBoolean("is_options_toggeled")
         hasPermissions = savedInstanceState.getBoolean("hasPermissions")
         started = savedInstanceState.getBoolean("started")
         direction = savedInstanceState.getInt("direction")
 
         API.token = savedInstanceState.getString("token")
         state_code = savedInstanceState.getString("state_code")
+
+        finishedAnimation = true
 
         resumeSession(savedInstanceState)
 
@@ -827,35 +831,29 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                 }
                 mapActions(it)
 
-                if (locationServiceActive) {
-                    drawSession(state_code!!)
-                }
-
-                // create bounds that encompass every location we reference
-
-                cameraFocusPosition(map)
-                setColorsAndTexts()
-                gameLoop(stateUID, null)
-                if (currentLocation != null) {
-                    map.stopAnimation()
-                    animateCamera(currentLocation, map, null)
-                    finishedAnimation = false
+                if (locationServiceActive && state_code != null) {
+                    startGameLoop()
+                } else {
+                    started = false
+                    locationServiceActive = false
                 }
             }
         }
     }
 
     private fun addStartingPointMarker() {
-        SP = map.addMarker(
-            MarkerOptions().position(
-                LatLng(
-                    locationStart!!.latitude,
-                    locationStart!!.longitude
+        if (locationStart != null) {
+            SP = map.addMarker(
+                MarkerOptions().position(
+                    LatLng(
+                        locationStart!!.latitude,
+                        locationStart!!.longitude
+                    )
                 )
+                    .title("Starting point")
+                    .icon(vectorToBitmap(R.drawable.startingpoint, 100, 150))
             )
-                .title("Starting point")
-                .icon(vectorToBitmap(R.drawable.startingpoint, 100, 150))
-        )
+        }
     }
 
     /**
@@ -890,7 +888,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
     }
 
     private fun doCompassThings() {
-        if (lastAccelerometerSet && lastMagnetometerSet && isCompassToggeled) {
+        if (lastAccelerometerSet && lastMagnetometerSet && isCompassToggled) {
             val r = FloatArray(9)
             if (SensorManager.getRotationMatrix(r, null, lastAccelerometer, lastMagnetometer)) {
                 val orientation = FloatArray(3)
@@ -1005,7 +1003,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                     Toast.makeText(this, "User interaction was cancelled.", Toast.LENGTH_SHORT)
                         .show()
                 }
-                grantResults[0] == PackageManager.PERMISSION_GRANTED -> {// Permission was granted.
+                grantResults[0] == PackageManager.PERMISSION_GRANTED -> { // Permission was granted.
                     Log.i(TAG, "Permission was granted")
                     hasPermissions = true
                     Toast.makeText(this, "Permission was granted", Toast.LENGTH_SHORT).show()
@@ -1060,13 +1058,103 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                         session_duration = 0.0f
                         drawSession(hash!!)
 
-                        finishedAnimation = false
                         cameraFocusPosition(map)
                         animateCamera(locationStart, map, null)
                     }
                 }
+
+                C.SESSION_START_ACTION -> {
+
+                    Toast.makeText(
+                        this@GameActivity,
+                        "Session started!",
+                        Toast.LENGTH_SHORT
+                    ).show()
+
+                    state_code = intent.getStringExtra(C.DISPLAY_SESSION_HASH)!!
+                    startGameLoop()
+
+                }
+
+                C.SESSION_END_ACTION -> {
+
+                    Toast.makeText(
+                        this@GameActivity,
+                        "Session ended!",
+                        Toast.LENGTH_SHORT
+                    ).show()
+
+                    locationServiceActive = false
+                    started = false
+
+                    StateVariables.hardReset()
+                    updateVisibleText()
+                    setColorsAndTexts()
+                }
+
+                C.SESSION_START_FAILED -> {
+                    started = false
+                    stopService(Intent(this@GameActivity, LocationService::class.java))
+
+                    Toast.makeText(
+                        this@GameActivity,
+                        "No internet!",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+
+                C.LOCATION_UPDATE_ACTION -> {
+
+                    val oldLocation =
+                        intent.extras?.get(C.LOCATION_UPDATE_ACTION_LOCATION_OLD) as Location?
+                    val newLocation =
+                        intent.extras!![C.LOCATION_UPDATE_ACTION_LOCATION] as Location
+
+                    val color = getTrackColor(oldLocation, newLocation)
+
+                    polylines.add(
+                        LocationCategory(
+                            newLocation,
+                            "LOC",
+                            if (state_code == null) "Current state" else state_code!!
+                        )
+                    )
+                    if (oldLocation != null) {
+                        map.addPolyline(
+                            PolylineOptions().add(
+                                LatLng(oldLocation.latitude, oldLocation.longitude),
+                                LatLng(newLocation.latitude, newLocation.longitude)
+                            ).color(color)
+                        )
+                    }
+                }
+
+                C.LOCATION_UPDATE_ACTION_CP -> {
+                    locationCP = intent.extras!![C.LOCATION_UPDATE_ACTION_CP] as Location
+                    map.addCheckPoint()
+                }
+
+                C.LOCATION_UPDATE_ACTION_WP -> {
+                    locationWP = intent.extras!![C.LOCATION_UPDATE_ACTION_WP] as Location
+                    map.addWayPoint()
+                }
             }
         }
+    }
+
+    private fun startGameLoop() {
+        stateUID = (random() * 100000).toInt()
+        locationServiceActive = true
+        started = true
+
+        if (state_code != null) {
+            drawSession(state_code!!)
+        } else {
+            map.clear()
+        }
+
+        setColorsAndTexts()
+        gameLoop(stateUID)
     }
 
     private fun drawSession(hash: String) {
@@ -1079,6 +1167,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
         var lastLocation: Location? = null
 
         for (location in databaseConnector.getAllSessionLocations(hash)) {
+
             if (location.marker_type == "CP") {
                 locationCP = location.getLocation()
                 map.addCheckPointMarker()
@@ -1090,19 +1179,33 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
             }
 
             if (lastLocation != null) {
-                polylines.add(
-                    LatLng(location.latitude, location.longitude)
-                )
+                polylines.add(location)
+
             } else {
                 locationStart = location.getLocation()
                 addStartingPointMarker()
+                polylines.add(location)
             }
 
             lastLocation = location.getLocation()
 
         }
 
-        map.addPolyline(PolylineOptions().addAll(polylines))
+        var last: LocationCategory? = null
+        for (location in polylines) {
+            if (last != null) {
+                val color = getTrackColor(last.getLocation(), location.getLocation())
+
+                map.addPolyline(
+                    PolylineOptions().add(
+                        LatLng(last.latitude, last.longitude),
+                        LatLng(location.latitude, location.longitude)
+                    ).color(color)
+                )
+            }
+            last = location
+        }
+
     }
 
 }
