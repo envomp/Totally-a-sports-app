@@ -2,8 +2,6 @@ package ee.taltech.spormapsapp.helper
 
 import android.location.Location
 import android.widget.RemoteViews
-import androidx.core.graphics.component1
-import androidx.core.graphics.component2
 import kotlin.math.roundToInt
 import kotlin.random.Random
 
@@ -16,7 +14,8 @@ object StateVariables {
     // COL 1
     var overall_distance_covered = 0f // meters
     var line_distance_covered = 0f // meters
-    var session_duration = 0f // seconds
+    var session_start = 0L // epoch time
+    var session_duration = 0L // seconds
     var overall_average_speed = 0 // min/km
 
     //COL 2
@@ -45,7 +44,8 @@ object StateVariables {
         sync_interval = 2000L
         overall_distance_covered = 0f
         line_distance_covered = 0f
-        session_duration = 0f
+        session_start = 0L
+        session_duration = 0L
         overall_average_speed = 0
         CP_distance_overall = 0f
         CP_distance_line = 0f
@@ -62,7 +62,7 @@ object StateVariables {
 
     fun fillColumn(
         notifyview: RemoteViews,
-        sessionDuration: Float,
+        sessionDuration: Long,
         overallDistanceCovered: Float,
         col: Int,
         row2: String
@@ -76,7 +76,7 @@ object StateVariables {
     }
 
     fun getColumnText(
-        sessionDuration: Float,
+        sessionDuration: Long,
         overallDistanceCovered: Float,
         row2: String
     ): Pair<Int, String> {

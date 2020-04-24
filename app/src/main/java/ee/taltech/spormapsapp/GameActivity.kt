@@ -67,6 +67,7 @@ import ee.taltech.spormapsapp.helper.StateVariables.locationWP
 import ee.taltech.spormapsapp.helper.StateVariables.overall_average_speed
 import ee.taltech.spormapsapp.helper.StateVariables.overall_distance_covered
 import ee.taltech.spormapsapp.helper.StateVariables.session_duration
+import ee.taltech.spormapsapp.helper.StateVariables.session_start
 import ee.taltech.spormapsapp.helper.StateVariables.stateUID
 import ee.taltech.spormapsapp.helper.StateVariables.state_code
 import ee.taltech.spormapsapp.helper.StateVariables.sync_interval
@@ -75,6 +76,7 @@ import kotlinx.android.synthetic.main.options.*
 import java.lang.Exception
 import java.lang.Math.*
 import kotlin.collections.HashMap
+import kotlin.math.roundToLong
 import kotlin.random.Random.Default.nextInt
 
 
@@ -571,7 +573,6 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
 
                 if (lastUID == stateUID) {
 
-                    session_duration += 0.1f
                     updateVisibleText()
 
                     if (hasPermissions && currentLocation != null) {
@@ -644,6 +645,9 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
 
     private fun updateVisibleText() {
 
+        session_duration =
+            if (session_start == 0L) 0 else (System.currentTimeMillis() - session_start) / 1000
+
         fillColumn(
             session_duration,
             overall_distance_covered,
@@ -673,7 +677,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
     }
 
     private fun fillColumn(
-        sessionDuration: Float,
+        sessionDuration: Long,
         overallDistanceCovered: Float,
         col: Int,
         row2: String
@@ -755,7 +759,8 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
 
         outState.putFloat("overall_distance_covered", overall_distance_covered)
         outState.putFloat("line_distance_covered", line_distance_covered)
-        outState.putFloat("session_duration", session_duration)
+        outState.putLong("session_duration", session_duration)
+        outState.putLong("session_start", session_start)
         outState.putInt("overall_average_speed", overall_average_speed)
 
         outState.putFloat("CP_distance_overall", CP_distance_overall)
@@ -788,7 +793,8 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
 
         overall_distance_covered = savedInstanceState.getFloat("overall_distance_covered")
         line_distance_covered = savedInstanceState.getFloat("line_distance_covered")
-        session_duration = savedInstanceState.getFloat("session_duration")
+        session_duration = savedInstanceState.getLong("session_duration")
+        session_start = savedInstanceState.getLong("session_start")
         overall_average_speed = savedInstanceState.getInt("overall_average_speed")
 
         CP_distance_overall = savedInstanceState.getFloat("CP_distance_overall")
@@ -1055,7 +1061,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                     } else {
                         val hash = intent.getStringExtra(C.DISPLAY_SESSION_HASH)
 
-                        session_duration = 0.0f
+                        session_duration = 0L
                         drawSession(hash!!)
 
                         cameraFocusPosition(map)
@@ -1144,6 +1150,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
 
     private fun startGameLoop() {
         stateUID = (random() * 100000).toInt()
+        session_start = System.currentTimeMillis()
         locationServiceActive = true
         started = true
 
