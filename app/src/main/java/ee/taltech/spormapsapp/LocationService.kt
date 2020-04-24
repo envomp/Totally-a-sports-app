@@ -136,7 +136,7 @@ class LocationService : Service() {
 
     private fun onNewLocation(location: Location) {
 
-        if (currentLocation != null && location.distanceTo(currentLocation) < 1.0f || (location.hasAccuracy() && location.accuracy > 100)) {
+        if (currentLocation != null && location.distanceTo(currentLocation) < 10.0f || (location.hasAccuracy() && location.accuracy > 100)) {
             return
         }
 
