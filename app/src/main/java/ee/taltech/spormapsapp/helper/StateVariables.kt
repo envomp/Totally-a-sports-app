@@ -84,9 +84,10 @@ class StateVariables {
         val covered = overallDistanceCovered.toInt()
         var averageSpeed = 0
         if (covered != 0) {
-            averageSpeed = (overallDistanceCovered / duration).roundToInt()
-
+            averageSpeed = ((duration / 60) / (overallDistanceCovered / 1000)).roundToInt()
         }
+
+        println(averageSpeed)
 
         val speedText = if (averageSpeed < 1 || averageSpeed > 99) {
             "--:--"
@@ -98,7 +99,7 @@ class StateVariables {
             "%s\n%s\n%s",
             "$covered m",
             row2,
-            "$speedText m/s"
+            "$speedText m/km"
         )
         return Pair(averageSpeed, text)
     }

@@ -60,6 +60,7 @@ import java.io.File
 import java.io.FileReader
 import java.io.FileWriter
 import java.lang.Math.*
+import kotlin.math.pow
 import kotlin.random.Random.Default.nextInt
 
 
@@ -112,7 +113,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
     private val stateVariables = StateVariables()
 
     private var minGradient = 0.0
-    private var maxGradient = 30.0
+    private var maxGradient = 100.0
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -528,7 +529,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
         }
 
         val bar = findViewById<RangeBar>(R.id.gradientRangeBar)
-        bar.setTickCount(30)
+        bar.setTickCount(100)
         bar.setTickHeight(0f)
 
         bar.setOnRangeBarChangeListener { _, i, i2 ->
@@ -593,9 +594,9 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                 (used_location.distanceTo(new_location)) / ((new_location.time - used_location.time).toDouble() / 1000)
         }
 
-        color = min(color - minGradient, maxGradient - minGradient) / (maxGradient - minGradient)
+        color = 1 - (kotlin.math.max(kotlin.math.min(color, maxGradient), minGradient) / (maxGradient - minGradient))
 
-        return (0xff000000 + (color * 255).toInt() * pow(16.0, 4.0).toInt()).toInt()
+        return (0xff000000 + (color * 255).toInt() * 16.0.pow(4.0).toInt()).toInt()
     }
 
     private fun setColorsAndTexts() {
