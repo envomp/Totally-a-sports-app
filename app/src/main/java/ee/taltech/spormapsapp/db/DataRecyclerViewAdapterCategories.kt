@@ -106,7 +106,7 @@ class DataRecyclerViewAdapterCategories(
                 val categoryTrueHash =
                     itemView.findViewById<TextView>(R.id.categoryTrueHash).text.toString()
                 val builder: AlertDialog.Builder = AlertDialog.Builder(context)
-                builder.setTitle("Please enter a name for your session or email for import")
+                builder.setTitle("Please enter a name for your session or email for importf")
 
                 val input = EditText(context)
 
@@ -137,7 +137,7 @@ class DataRecyclerViewAdapterCategories(
                 }
 
                 builder.setNeutralButton(
-                    "Import"
+                    "Export"
                 ) { dialog, _ ->
                     run {
                         dialog.cancel()
