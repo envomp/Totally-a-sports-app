@@ -90,14 +90,14 @@
         android:id="@+id/syncInterval"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:autofillHints="default is 5"
         android:ems="2"
-        android:inputType="text"
-        android:text="2"
+        android:inputType="number"
+        android:text="5"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.5"
         app:layout_constraintStart_toEndOf="@+id/textView"
-        app:layout_constraintTop_toBottomOf="@+id/gradientRangeBar"
-        android:autofillHints="default is 2" />
+        app:layout_constraintTop_toBottomOf="@+id/gradientRangeBar" />
 
 
 </androidx.constraintlayout.widget.ConstraintLayout>

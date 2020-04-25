@@ -63,12 +63,34 @@ class DataRecyclerViewAdapterCategories(
         init {
 
             itemView.findViewById<Button>(R.id.delete_session).setOnClickListener {
-                val categoryTrueHash =
-                    itemView.findViewById<TextView>(R.id.categoryTrueHash).text.toString()
-                databaseConnector.deleteByHash(categoryTrueHash)
 
-                val intent = Intent(C.DB_UPDATE)
-                PendingIntent.getBroadcast(context, 0, intent, 0).send()
+                val builder: AlertDialog.Builder = AlertDialog.Builder(context)
+                builder.setTitle("Are you sure you want to delete selected session?")
+
+                builder.setPositiveButton(
+                    "Delete"
+                ) { _, _ ->
+                    run {
+
+                        val categoryTrueHash =
+                            itemView.findViewById<TextView>(R.id.categoryTrueHash).text.toString()
+                        databaseConnector.deleteByHash(categoryTrueHash)
+
+                        val intent = Intent(C.DB_UPDATE)
+                        PendingIntent.getBroadcast(context, 0, intent, 0).send()
+
+                    }
+                }
+
+                builder.setNegativeButton(
+                    "Cancel"
+                ) { dialog, _ ->
+                    run {
+                        dialog.cancel()
+                    }
+                }
+
+                builder.show()
 
             }
 
@@ -84,7 +106,7 @@ class DataRecyclerViewAdapterCategories(
                 val categoryTrueHash =
                     itemView.findViewById<TextView>(R.id.categoryTrueHash).text.toString()
                 val builder: AlertDialog.Builder = AlertDialog.Builder(context)
-                builder.setTitle("Please enter a name for your session")
+                builder.setTitle("Please enter a name for your session or email for import")
 
                 val input = EditText(context)
 
@@ -105,11 +127,26 @@ class DataRecyclerViewAdapterCategories(
 
                     }
                 }
+
                 builder.setNegativeButton(
                     "Cancel"
                 ) { dialog, _ ->
                     run {
                         dialog.cancel()
+                    }
+                }
+
+                builder.setNeutralButton(
+                    "Import"
+                ) { dialog, _ ->
+                    run {
+                        dialog.cancel()
+
+                        val intent = Intent(C.EXPORT_DB)
+                        intent.putExtra(C.DISPLAY_SESSION_HASH, categoryTrueHash)
+                        intent.putExtra(C.EXPORT_TO_EMAIL, input.text.toString())
+                        PendingIntent.getBroadcast(context, 0, intent, Random.nextInt(0, 1000))
+                            .send()
                     }
                 }
 

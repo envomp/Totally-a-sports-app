@@ -12,9 +12,15 @@ class C {
 
         const val LOCATION_UPDATE_ACTION = "ee.taltech.spormapsapp.location_update"
         const val SESSION_TOKEN = "ee.taltech.spormapsapp.session_token"
+        const val INTERVAL = "ee.taltech.spormapsapp.interval"
 
         const val DB_UPDATE = "ee.taltech.spormapsapp.db_update"
+        const val EXPORT_DB = "ee.taltech.spormapsapp.export_db"
+        const val EXPORT_TO_EMAIL = "ee.taltech.spormapsapp.export_db.mail"
+
         const val DISPLAY_SESSION = "ee.taltech.spormapsapp.session_display"
+        const val FETCH_SESSION = "ee.taltech.spormapsapp.fetch_display"
+        const val RESPOND_SESSION = "ee.taltech.spormapsapp.respond_display"
         const val DISPLAY_SESSION_HASH = "ee.taltech.spormapsapp.session_display.hash"
 
         const val LOCATION_UPDATE_ACTION_LOCATION_OLD = "ee.taltech.spormapsapp.location_update.location_old"

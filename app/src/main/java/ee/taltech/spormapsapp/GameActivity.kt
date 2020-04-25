@@ -53,30 +53,13 @@ import ee.taltech.spormapsapp.db.LocationCategory
 import ee.taltech.spormapsapp.db.LocationCategoryRepository
 import ee.taltech.spormapsapp.helper.C
 import ee.taltech.spormapsapp.helper.StateVariables
-import ee.taltech.spormapsapp.helper.StateVariables.CP_average_speed
-import ee.taltech.spormapsapp.helper.StateVariables.CP_distance_line
-import ee.taltech.spormapsapp.helper.StateVariables.CP_distance_overall
-import ee.taltech.spormapsapp.helper.StateVariables.WP_average_speed
-import ee.taltech.spormapsapp.helper.StateVariables.WP_distance_line
-import ee.taltech.spormapsapp.helper.StateVariables.WP_distance_overall
-import ee.taltech.spormapsapp.helper.StateVariables.currentLocation
-import ee.taltech.spormapsapp.helper.StateVariables.line_distance_covered
-import ee.taltech.spormapsapp.helper.StateVariables.locationCP
-import ee.taltech.spormapsapp.helper.StateVariables.locationStart
-import ee.taltech.spormapsapp.helper.StateVariables.locationWP
-import ee.taltech.spormapsapp.helper.StateVariables.overall_average_speed
-import ee.taltech.spormapsapp.helper.StateVariables.overall_distance_covered
-import ee.taltech.spormapsapp.helper.StateVariables.session_duration
-import ee.taltech.spormapsapp.helper.StateVariables.session_start
-import ee.taltech.spormapsapp.helper.StateVariables.stateUID
-import ee.taltech.spormapsapp.helper.StateVariables.state_code
-import ee.taltech.spormapsapp.helper.StateVariables.sync_interval
+import ee.taltech.spormapsapp.helper.Utils
 import kotlinx.android.synthetic.main.map.*
 import kotlinx.android.synthetic.main.options.*
-import java.lang.Exception
+import java.io.File
+import java.io.FileReader
+import java.io.FileWriter
 import java.lang.Math.*
-import kotlin.collections.HashMap
-import kotlin.math.roundToLong
 import kotlin.random.Random.Default.nextInt
 
 
@@ -126,6 +109,8 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
     private var SP: Marker? = null // way points. Only one!
     private var polylines: MutableList<LocationCategory> = mutableListOf() // path
 
+    private val stateVariables = StateVariables()
+
     private var minGradient = 0.0
     private var maxGradient = 30.0
 
@@ -143,7 +128,8 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
         broadcastReceiverIntentFilter.addAction(C.DISPLAY_SESSION)
         broadcastReceiverIntentFilter.addAction(C.LOCATION_UPDATE_ACTION_WP)
         broadcastReceiverIntentFilter.addAction(C.LOCATION_UPDATE_ACTION_CP)
-
+        broadcastReceiverIntentFilter.addAction(C.RESPOND_SESSION)
+        broadcastReceiverIntentFilter.addAction(C.EXPORT_DB)
 
         registerReceiver(broadcastReceiver, broadcastReceiverIntentFilter)
 
@@ -177,22 +163,20 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
 
                 if (LocationService.isServiceCreated()) {
 
-                    try {
-                        started = true
-                        locationServiceActive = true
-                        if (hasPermissions) {
-                            currentLocation = map.myLocation
-                        }
-                        drawSession(state_code!!)
-                        startGameLoop()
-                    } catch (e: Exception) {
-                        started = false
-                        locationServiceActive = false
-                        stopService(Intent(this@GameActivity, LocationService::class.java))
-                        StateVariables.hardReset()
-                        updateVisibleText()
-                        setColorsAndTexts()
-                    }
+                    val intent = Intent(C.FETCH_SESSION)
+
+                    PendingIntent.getBroadcast(
+                        this@GameActivity,
+                        0, intent, nextInt(0, 1000)
+                    ).send()
+
+                    Handler().postDelayed(
+                        {
+                            drawSession(stateVariables.state_code!!)
+                            startGameLoop()
+                        },
+                        100
+                    )
                 }
             }
         }
@@ -205,6 +189,8 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
         wireGameButtons()
         updateVisibleText()
 
+        Utils.verifyStoragePermissions(this)
+
     }
 
     private fun mapActions(
@@ -216,47 +202,53 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
 
             map.setOnMyLocationButtonClickListener {
                 map.stopAnimation()
-                animateCamera(currentLocation, map, null)
+                animateCamera(stateVariables.currentLocation, map, null)
                 true
             }
         }
     }
 
     private fun GoogleMap.addWayPoint() {
-        if (locationWP != null) {
+        if (stateVariables.locationWP != null) {
+
             WP?.remove()
             addWayPointMarker()
+            makeToast("Added a way point")
 
-            Toast.makeText(this@GameActivity, "Added a way point", Toast.LENGTH_SHORT)
-                .show()
         }
     }
 
     private fun GoogleMap.addWayPointMarker() {
         WP = addMarker(
-            MarkerOptions().position(LatLng(locationWP!!.latitude, locationWP!!.longitude))
+            MarkerOptions().position(
+                LatLng(
+                    stateVariables.locationWP!!.latitude,
+                    stateVariables.locationWP!!.longitude
+                )
+            )
                 .title("Way point")
                 .icon(vectorToBitmap(R.drawable.waypoint, 100, 150))
         )
     }
 
     private fun GoogleMap.addCheckPoint() {
-        if (locationCP != null) {
-            addCheckPointMarker()
+        if (stateVariables.locationCP != null) {
 
-            Toast.makeText(
-                this@GameActivity,
-                String.format("Added a capture point nr. " + (CP.size)),
-                Toast.LENGTH_SHORT
-            )
-                .show()
+            addCheckPointMarker()
+            makeToast(String.format("Added a capture point nr. " + (CP.size)))
+
         }
     }
 
     private fun GoogleMap.addCheckPointMarker() {
         CP.add(
             addMarker(
-                MarkerOptions().position(LatLng(locationCP!!.latitude, locationCP!!.longitude))
+                MarkerOptions().position(
+                    LatLng(
+                        stateVariables.locationCP!!.latitude,
+                        stateVariables.locationCP!!.longitude
+                    )
+                )
                     .title(String.format("Capture point nr. " + (CP.size + 1)))
                     .icon(vectorToBitmap(R.drawable.capturepoint, 100, 150))
             )
@@ -299,7 +291,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                     animateCamera(
                         null,
                         map,
-                        if (locationWP != null) location.bearingTo(locationWP) else null
+                        if (stateVariables.locationWP != null) location.bearingTo(stateVariables.locationWP) else null
                     )
                 }
             }
@@ -368,11 +360,8 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
         findViewById<Button>(R.id.start_or_stop).setBackgroundColor(resources.getColor(R.color.colorGreen))
         findViewById<Button>(R.id.start_or_stop).setOnClickListener {
             if (!hasPermissions) {
-                Toast.makeText(
-                    this@GameActivity,
-                    "Can't track you without permissions!",
-                    Toast.LENGTH_SHORT
-                ).show()
+                makeToast("Can't track you without permissions!")
+
             } else {
                 if (locationServiceActive) {
                     // stopping the service
@@ -389,10 +378,10 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                         "Use custom alias"
                     ) { _, _ ->
                         run {
-                            val session = if (state_code == null) {
+                            val session = if (stateVariables.state_code == null) {
                                 "No Session"
                             } else {
-                                state_code!!
+                                stateVariables.state_code!!
                             }
 
                             shutServiceDown(session, input.text.toString())
@@ -406,10 +395,10 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                         run {
                             dialog.cancel()
 
-                            val session = if (state_code == null) {
+                            val session = if (stateVariables.state_code == null) {
                                 "No Session"
                             } else {
-                                state_code!!
+                                stateVariables.state_code!!
                             }
 
                             shutServiceDown(session, session)
@@ -433,23 +422,37 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                         findViewById<EditText>(R.id.syncInterval).text.toString().toLongOrNull()
 
                     if (interval != null) {
-                        sync_interval = kotlin.math.max(interval, 1) * 1000
+                        stateVariables.sync_interval = kotlin.math.max(interval, 1) * 1000
                     } else {
-                        sync_interval = 2000
+                        stateVariables.sync_interval = 5000
                     }
 
-                    locationStart = map.myLocation
+                    stateVariables.locationStart = map.myLocation
+                    stateVariables.currentLocation = map.myLocation
+
                     if (Build.VERSION.SDK_INT >= 26) {
                         // starting the FOREGROUND service
                         // service has to display non-dismissable notification within 5 secs
                         startForegroundService(Intent(this, LocationService::class.java))
                     } else {
                         startService(Intent(this, LocationService::class.java))
-                        val intent = Intent(C.SESSION_TOKEN)
-                        intent.putExtra(C.SESSION_TOKEN, API.token)
-                        PendingIntent.getBroadcast(this@GameActivity, 0, intent, nextInt(0, 1000))
-                            .send()
                     }
+
+                    Handler().postDelayed(
+                        {
+                            val intent = Intent(C.SESSION_TOKEN)
+
+                            intent.putExtra(C.SESSION_TOKEN, API.token)
+                            intent.putExtra(C.LOCATION_UPDATE_ACTION, map.myLocation)
+                            intent.putExtra(C.INTERVAL, stateVariables.sync_interval)
+
+                            PendingIntent.getBroadcast(
+                                this@GameActivity,
+                                0, intent, nextInt(0, 1000)
+                            ).send()
+                        },
+                        100 // value in milliseconds
+                    )
 
                     started = true
                 }
@@ -460,19 +463,17 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
         findViewById<Button>(R.id.add_wp).setBackgroundColor(resources.getColor(R.color.colorGreen))
         findViewById<Button>(R.id.add_wp).setOnClickListener {
 
-            if (started && currentLocation != null) {
-                val location = Location(currentLocation)
-                locationWP = location
+            if (started && stateVariables.currentLocation != null) {
+                val location = Location(stateVariables.currentLocation)
+                stateVariables.locationWP = location
 
                 // broadcast to service so it can be added to backend
                 val intent = Intent(C.NOTIFICATION_ACTION_WP)
                 PendingIntent.getBroadcast(this@GameActivity, 0, intent, 0).send()
             } else {
-                Toast.makeText(
-                    this@GameActivity,
-                    "Start the game to add WP",
-                    Toast.LENGTH_SHORT
-                ).show()
+
+                makeToast("Start the game to add WP")
+
             }
             setColorsAndTexts()
 
@@ -481,19 +482,17 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
         findViewById<Button>(R.id.add_cp).setBackgroundColor(resources.getColor(R.color.colorGreen))
         findViewById<Button>(R.id.add_cp).setOnClickListener {
 
-            if (started && currentLocation != null) {
-                locationCP = Location(currentLocation)
+            if (started && stateVariables.currentLocation != null) {
+                stateVariables.locationCP = Location(stateVariables.currentLocation)
 
                 // broadcast to service so it can be added to backend
                 val intent = Intent(C.NOTIFICATION_ACTION_CP)
                 PendingIntent.getBroadcast(this@GameActivity, 0, intent, 0).send()
 
             } else {
-                Toast.makeText(
-                    this@GameActivity,
-                    "Start the game to add CP",
-                    Toast.LENGTH_SHORT
-                ).show()
+
+                makeToast("Start the game to add CP")
+
             }
             setColorsAndTexts()
 
@@ -561,7 +560,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
 
         stopService(Intent(this, LocationService::class.java))
 
-        StateVariables.hardReset()
+        stateVariables.hardReset()
         updateVisibleText()
         setColorsAndTexts()
 
@@ -571,12 +570,10 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
         Handler().postDelayed(
             {
 
-                if (lastUID == stateUID) {
+                if (lastUID == stateVariables.stateUID) {
 
-                    updateVisibleText()
-
-                    if (hasPermissions && currentLocation != null) {
-                        mapTransformation(currentLocation!!, map)
+                    if (hasPermissions && stateVariables.currentLocation != null) {
+                        mapTransformation(stateVariables.currentLocation!!, map)
                     }
 
                     gameLoop(lastUID)
@@ -645,33 +642,30 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
 
     private fun updateVisibleText() {
 
-        session_duration =
-            if (session_start == 0L) 0 else (System.currentTimeMillis() - session_start) / 1000
-
         fillColumn(
-            session_duration,
-            overall_distance_covered,
+            stateVariables.session_duration,
+            stateVariables.overall_distance_covered,
             R.id.col1,
             String.format(
                 "%s:%s:%s",
-                (session_duration.toInt() / 3600).toString().padStart(2, '0'),
-                ((session_duration.toInt() / 60) % 60).toString().padStart(2, '0'),
-                (session_duration.toInt() % 60).toString().padStart(2, '0')
+                (stateVariables.session_duration.toInt() / 3600).toString().padStart(2, '0'),
+                ((stateVariables.session_duration.toInt() / 60) % 60).toString().padStart(2, '0'),
+                (stateVariables.session_duration.toInt() % 60).toString().padStart(2, '0')
             )
         )
 
         fillColumn(
-            session_duration,
-            CP_distance_overall,
+            stateVariables.session_duration,
+            stateVariables.CP_distance_overall,
             R.id.col2,
-            "${((CP_distance_line * 10).toInt().toDouble() / 10)} m"
+            "${((stateVariables.CP_distance_line * 10).toInt().toDouble() / 10)} m"
         )
 
         fillColumn(
-            session_duration,
-            WP_distance_overall,
+            stateVariables.session_duration,
+            stateVariables.WP_distance_overall,
             R.id.col3,
-            "${((WP_distance_line * 10).toInt().toDouble() / 10)} m"
+            "${((stateVariables.WP_distance_line * 10).toInt().toDouble() / 10)} m"
         )
 
     }
@@ -683,7 +677,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
         row2: String
     ): Int {
 
-        val (averageSpeed, text) = StateVariables.getColumnText(
+        val (averageSpeed, text) = stateVariables.getColumnText(
             sessionDuration,
             overallDistanceCovered,
             row2
@@ -757,19 +751,19 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
         super.onSaveInstanceState(outState)
         Log.d(TAG, "lifecycle onSaveInstanceState")
 
-        outState.putFloat("overall_distance_covered", overall_distance_covered)
-        outState.putFloat("line_distance_covered", line_distance_covered)
-        outState.putLong("session_duration", session_duration)
-        outState.putLong("session_start", session_start)
-        outState.putInt("overall_average_speed", overall_average_speed)
+        outState.putFloat("overall_distance_covered", stateVariables.overall_distance_covered)
+        outState.putFloat("line_distance_covered", stateVariables.line_distance_covered)
+        outState.putLong("session_duration", stateVariables.session_duration)
+        outState.putLong("session_start", stateVariables.session_start)
+        outState.putInt("overall_average_speed", stateVariables.overall_average_speed)
 
-        outState.putFloat("CP_distance_overall", CP_distance_overall)
-        outState.putFloat("CP_distance_line", CP_distance_line)
-        outState.putInt("CP_average_speed", CP_average_speed)
+        outState.putFloat("CP_distance_overall", stateVariables.CP_distance_overall)
+        outState.putFloat("CP_distance_line", stateVariables.CP_distance_line)
+        outState.putInt("CP_average_speed", stateVariables.CP_average_speed)
 
-        outState.putFloat("WP_distance_overall", WP_distance_overall)
-        outState.putFloat("WP_distance_line", WP_distance_line)
-        outState.putInt("WP_average_speed", WP_average_speed)
+        outState.putFloat("WP_distance_overall", stateVariables.WP_distance_overall)
+        outState.putFloat("WP_distance_line", stateVariables.WP_distance_line)
+        outState.putInt("WP_average_speed", stateVariables.WP_average_speed)
 
         outState.putBoolean("locationServiceActive", locationServiceActive)
 
@@ -781,7 +775,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
         outState.putBoolean("started", started)
         outState.putInt("direction", direction)
 
-        outState.putString("state_code", state_code)
+        outState.putString("state_code", stateVariables.state_code)
         outState.putString("token", API.token)
 
     }
@@ -789,21 +783,22 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
     override fun onRestoreInstanceState(savedInstanceState: Bundle) {
         super.onRestoreInstanceState(savedInstanceState)
         Log.d(TAG, "lifecycle onRestoreInstanceState")
-        stateUID = (random() * 100000).toInt()
+        stateVariables.stateUID = (random() * 100000).toInt()
 
-        overall_distance_covered = savedInstanceState.getFloat("overall_distance_covered")
-        line_distance_covered = savedInstanceState.getFloat("line_distance_covered")
-        session_duration = savedInstanceState.getLong("session_duration")
-        session_start = savedInstanceState.getLong("session_start")
-        overall_average_speed = savedInstanceState.getInt("overall_average_speed")
+        stateVariables.overall_distance_covered =
+            savedInstanceState.getFloat("overall_distance_covered")
+        stateVariables.line_distance_covered = savedInstanceState.getFloat("line_distance_covered")
+        stateVariables.session_duration = savedInstanceState.getLong("session_duration")
+        stateVariables.session_start = savedInstanceState.getLong("session_start")
+        stateVariables.overall_average_speed = savedInstanceState.getInt("overall_average_speed")
 
-        CP_distance_overall = savedInstanceState.getFloat("CP_distance_overall")
-        CP_distance_line = savedInstanceState.getFloat("CP_distance_line")
-        CP_average_speed = savedInstanceState.getInt("CP_average_speed")
+        stateVariables.CP_distance_overall = savedInstanceState.getFloat("CP_distance_overall")
+        stateVariables.CP_distance_line = savedInstanceState.getFloat("CP_distance_line")
+        stateVariables.CP_average_speed = savedInstanceState.getInt("CP_average_speed")
 
-        WP_distance_overall = savedInstanceState.getFloat("WP_distance_overall")
-        WP_distance_line = savedInstanceState.getFloat("WP_distance_line")
-        WP_average_speed = savedInstanceState.getInt("WP_average_speed")
+        stateVariables.WP_distance_overall = savedInstanceState.getFloat("WP_distance_overall")
+        stateVariables.WP_distance_line = savedInstanceState.getFloat("WP_distance_line")
+        stateVariables.WP_average_speed = savedInstanceState.getInt("WP_average_speed")
 
         locationServiceActive = savedInstanceState.getBoolean("locationServiceActive")
 
@@ -816,7 +811,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
         direction = savedInstanceState.getInt("direction")
 
         API.token = savedInstanceState.getString("token")
-        state_code = savedInstanceState.getString("state_code")
+        stateVariables.state_code = savedInstanceState.getString("state_code")
 
         finishedAnimation = true
 
@@ -837,7 +832,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                 }
                 mapActions(it)
 
-                if (locationServiceActive && state_code != null) {
+                if (locationServiceActive && stateVariables.state_code != null) {
                     startGameLoop()
                 } else {
                     started = false
@@ -848,12 +843,12 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
     }
 
     private fun addStartingPointMarker() {
-        if (locationStart != null) {
+        if (stateVariables.locationStart != null) {
             SP = map.addMarker(
                 MarkerOptions().position(
                     LatLng(
-                        locationStart!!.latitude,
-                        locationStart!!.longitude
+                        stateVariables.locationStart!!.latitude,
+                        stateVariables.locationStart!!.longitude
                     )
                 )
                     .title("Starting point")
@@ -932,7 +927,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                 C.NOTIFICATION_CHANNEL,
                 "Default channel",
                 NotificationManager.IMPORTANCE_LOW
-            );
+            )
 
             //.setShowBadge(false).setSound(null, null);
 
@@ -1004,15 +999,12 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
         if (requestCode == C.REQUEST_PERMISSIONS_REQUEST_CODE) {
             when {
                 grantResults.count() <= 0 -> { // If user interaction was interrupted, the permission request is cancelled and you
-                    // receive empty arrays.
-                    Log.i(TAG, "User interaction was cancelled.")
-                    Toast.makeText(this, "User interaction was cancelled.", Toast.LENGTH_SHORT)
-                        .show()
+                    makeToast("User interaction was cancelled.")
                 }
                 grantResults[0] == PackageManager.PERMISSION_GRANTED -> { // Permission was granted.
                     Log.i(TAG, "Permission was granted")
                     hasPermissions = true
-                    Toast.makeText(this, "Permission was granted", Toast.LENGTH_SHORT).show()
+                    makeToast("Permission was granted")
                 }
                 else -> { // Permission denied.
                     Snackbar.make(
@@ -1039,6 +1031,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
 
     }
 
+
     private inner class InnerBroadcastReceiver : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             Log.d(TAG, intent!!.action)
@@ -1052,48 +1045,33 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                 C.DISPLAY_SESSION -> {
 
                     if (started) {
-                        Toast.makeText(
-                            this@GameActivity,
-                            String.format("To display older sessions\nFinish the current session first!"),
-                            Toast.LENGTH_SHORT
-                        )
-                            .show()
+
+                        makeToast("To display older sessions\nFinish the current session first!")
+
                     } else {
+
                         val hash = intent.getStringExtra(C.DISPLAY_SESSION_HASH)
-
-                        session_duration = 0L
+                        stateVariables.session_duration = 0L
                         drawSession(hash!!)
-
                         cameraFocusPosition(map)
-                        animateCamera(locationStart, map, null)
+                        animateCamera(stateVariables.locationStart, map, null)
                     }
                 }
 
                 C.SESSION_START_ACTION -> {
 
-                    Toast.makeText(
-                        this@GameActivity,
-                        "Session started!",
-                        Toast.LENGTH_SHORT
-                    ).show()
-
-                    state_code = intent.getStringExtra(C.DISPLAY_SESSION_HASH)!!
+                    makeToast("Session started!")
+                    stateVariables.state_code = intent.getStringExtra(C.DISPLAY_SESSION_HASH)!!
                     startGameLoop()
 
                 }
 
                 C.SESSION_END_ACTION -> {
 
-                    Toast.makeText(
-                        this@GameActivity,
-                        "Session ended!",
-                        Toast.LENGTH_SHORT
-                    ).show()
-
+                    makeToast("Session ended!")
                     locationServiceActive = false
                     started = false
-
-                    StateVariables.hardReset()
+                    stateVariables.hardReset()
                     updateVisibleText()
                     setColorsAndTexts()
                 }
@@ -1102,11 +1080,8 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                     started = false
                     stopService(Intent(this@GameActivity, LocationService::class.java))
 
-                    Toast.makeText(
-                        this@GameActivity,
-                        "No internet!",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    makeToast("No internet!")
+
                 }
 
                 C.LOCATION_UPDATE_ACTION -> {
@@ -1122,7 +1097,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                         LocationCategory(
                             newLocation,
                             "LOC",
-                            if (state_code == null) "Current state" else state_code!!
+                            if (stateVariables.state_code == null) "Current state" else stateVariables.state_code!!
                         )
                     )
                     if (oldLocation != null) {
@@ -1133,35 +1108,130 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                             ).color(color)
                         )
                     }
+
+                    stateVariables.currentLocation = newLocation
+                    stateVariables.oldLocation = oldLocation
                 }
 
                 C.LOCATION_UPDATE_ACTION_CP -> {
-                    locationCP = intent.extras!![C.LOCATION_UPDATE_ACTION_CP] as Location
+                    stateVariables.locationCP =
+                        intent.extras!![C.LOCATION_UPDATE_ACTION_CP] as Location
                     map.addCheckPoint()
                 }
 
                 C.LOCATION_UPDATE_ACTION_WP -> {
-                    locationWP = intent.extras!![C.LOCATION_UPDATE_ACTION_WP] as Location
+                    stateVariables.locationWP =
+                        intent.extras!![C.LOCATION_UPDATE_ACTION_WP] as Location
                     map.addWayPoint()
+                }
+
+                C.RESPOND_SESSION -> {
+
+                    stateVariables.state_code = intent.extras?.get("state_code") as String
+                    stateVariables.currentLocation =
+                        intent.extras?.get("currentLocation") as Location?
+                    stateVariables.overall_distance_covered =
+                        intent.extras?.get("overall_distance_covered") as Float
+                    stateVariables.line_distance_covered =
+                        intent.extras?.get("line_distance_covered") as Float
+                    stateVariables.session_start = intent.extras?.get("session_start") as Long
+                    stateVariables.session_duration = intent.extras?.get("session_duration") as Long
+                    stateVariables.overall_average_speed =
+                        intent.extras?.get("overall_average_speed") as Int
+                    stateVariables.CP_distance_overall =
+                        intent.extras?.get("CP_distance_overall") as Float
+                    stateVariables.CP_distance_line =
+                        intent.extras?.get("CP_distance_line") as Float
+                    stateVariables.CP_average_speed = intent.extras?.get("CP_average_speed") as Int
+                    stateVariables.WP_distance_overall =
+                        intent.extras?.get("WP_distance_overall") as Float
+                    stateVariables.WP_distance_line =
+                        intent.extras?.get("WP_distance_line") as Float
+                    stateVariables.WP_average_speed = intent.extras?.get("WP_average_speed") as Int
+                    stateVariables.oldLocation = intent.extras?.get("oldLocation") as Location?
+                    stateVariables.currentLocation =
+                        intent.extras?.get("currentLocation") as Location?
+                    stateVariables.locationStart = intent.extras?.get("locationStart") as Location?
+                    stateVariables.locationCP = intent.extras?.get("locationCP") as Location?
+                    stateVariables.locationWP = intent.extras?.get("locationWP") as Location?
+
+
+                    started = true
+                    locationServiceActive = true
+
+                    setColorsAndTexts()
+                    updateVisibleText()
+
+                }
+
+                C.EXPORT_DB -> {
+
+                    try {
+                        val session = intent.getStringExtra(C.DISPLAY_SESSION_HASH)!!
+                        val to = intent.getStringExtra(C.EXPORT_TO_EMAIL)!!
+
+                        if (Utils.isValidEmail(to)) {
+                            val content = Utils.generateGfx(
+                                session,
+                                databaseConnector.getAllSessionLocations(session)
+                            )
+
+                            val tempFile = File.createTempFile(
+                                session,
+                                ".gpx",
+                                context!!.externalCacheDir
+                            )
+
+                            val fw = FileWriter(tempFile)
+
+                            fw.write(content)
+
+                            fw.flush()
+                            fw.close()
+
+                            val mailTo = "mailto:" + to +
+                                    "?&subject=" + Uri.encode("GPX file") +
+                                    "&body=" + Uri.encode("See attachments")
+                            val emailIntent = Intent(Intent.ACTION_VIEW)
+                            emailIntent.data = Uri.parse(mailTo)
+                            emailIntent.putExtra(Intent.EXTRA_STREAM, Uri.fromFile(tempFile))
+                            startActivityForResult(emailIntent, 69)
+
+                        } else {
+                            makeToast("Given email is invalid!")
+                        }
+
+                    } catch (e: Exception) {
+                        makeToast("No permissions!")
+                    }
                 }
             }
         }
     }
 
+    private fun makeToast(message: String) {
+        Toast.makeText(
+            this@GameActivity,
+            message,
+            Toast.LENGTH_SHORT
+        ).show()
+    }
+
     private fun startGameLoop() {
-        stateUID = (random() * 100000).toInt()
-        session_start = System.currentTimeMillis()
+        stateVariables.stateUID = (random() * 100000).toInt()
+
         locationServiceActive = true
         started = true
+        hasPermissions = true
 
-        if (state_code != null) {
-            drawSession(state_code!!)
+        if (stateVariables.state_code != null) {
+            drawSession(stateVariables.state_code!!)
         } else {
             map.clear()
         }
 
         setColorsAndTexts()
-        gameLoop(stateUID)
+        gameLoop(stateVariables.stateUID)
     }
 
     private fun drawSession(hash: String) {
@@ -1176,12 +1246,12 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
         for (location in databaseConnector.getAllSessionLocations(hash)) {
 
             if (location.marker_type == "CP") {
-                locationCP = location.getLocation()
+                stateVariables.locationCP = location.getLocation()
                 map.addCheckPointMarker()
             }
 
             if (location.marker_type == "WP") {
-                locationWP = location.getLocation()
+                stateVariables.locationWP = location.getLocation()
                 map.addWayPointMarker()
             }
 
@@ -1189,7 +1259,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                 polylines.add(location)
 
             } else {
-                locationStart = location.getLocation()
+                stateVariables.locationStart = location.getLocation()
                 addStartingPointMarker()
                 polylines.add(location)
             }

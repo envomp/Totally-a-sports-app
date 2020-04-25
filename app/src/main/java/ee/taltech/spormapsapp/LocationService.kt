@@ -20,30 +20,12 @@ import com.google.android.gms.location.*
 import ee.taltech.spormapsapp.api.API.BASE_URL
 import ee.taltech.spormapsapp.api.API.GPS_LOCATIONS
 import ee.taltech.spormapsapp.api.API.GPS_SESSION
-import ee.taltech.spormapsapp.helper.StateVariables.CP_average_speed
-import ee.taltech.spormapsapp.helper.StateVariables.CP_distance_line
-import ee.taltech.spormapsapp.helper.StateVariables.CP_distance_overall
-import ee.taltech.spormapsapp.helper.StateVariables.WP_average_speed
-import ee.taltech.spormapsapp.helper.StateVariables.WP_distance_line
-import ee.taltech.spormapsapp.helper.StateVariables.WP_distance_overall
-import ee.taltech.spormapsapp.helper.StateVariables.currentLocation
-import ee.taltech.spormapsapp.helper.StateVariables.fillColumn
-import ee.taltech.spormapsapp.helper.StateVariables.line_distance_covered
-import ee.taltech.spormapsapp.helper.StateVariables.locationCP
-import ee.taltech.spormapsapp.helper.StateVariables.locationStart
-import ee.taltech.spormapsapp.helper.StateVariables.locationWP
-import ee.taltech.spormapsapp.helper.StateVariables.oldLocation
-import ee.taltech.spormapsapp.helper.StateVariables.overall_average_speed
-import ee.taltech.spormapsapp.helper.StateVariables.overall_distance_covered
-import ee.taltech.spormapsapp.helper.StateVariables.session_duration
-import ee.taltech.spormapsapp.helper.StateVariables.state_code
 import ee.taltech.spormapsapp.api.API
 import ee.taltech.spormapsapp.api.WebApiSingletonHandler
 import ee.taltech.spormapsapp.db.LocationCategory
 import ee.taltech.spormapsapp.db.LocationCategoryRepository
 import ee.taltech.spormapsapp.helper.C
 import ee.taltech.spormapsapp.helper.StateVariables
-import ee.taltech.spormapsapp.helper.StateVariables.sync_interval
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.*
@@ -84,6 +66,8 @@ class LocationService : Service() {
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", Locale.getDefault())
 
+    private val stateVariables = StateVariables()
+
     var token: String? = null
 
     override fun onCreate() {
@@ -91,15 +75,13 @@ class LocationService : Service() {
         super.onCreate()
         mInstance = this
 
-        token = API.token
-        currentLocation = locationStart
-
         databaseConnector = LocationCategoryRepository(this).open()
 
         broadcastReceiverIntentFilter.addAction(C.NOTIFICATION_ACTION_CP)
         broadcastReceiverIntentFilter.addAction(C.NOTIFICATION_ACTION_WP)
         broadcastReceiverIntentFilter.addAction(C.LOCATION_UPDATE_ACTION)
         broadcastReceiverIntentFilter.addAction(C.SESSION_TOKEN)
+        broadcastReceiverIntentFilter.addAction(C.FETCH_SESSION)
 
         registerReceiver(broadcastReceiver, broadcastReceiverIntentFilter)
         mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
@@ -110,12 +92,6 @@ class LocationService : Service() {
                 onNewLocation(locationResult.lastLocation)
             }
         }
-
-        getLastLocation()
-        createLocationRequest()
-        requestLocationUpdates()
-        startRestTrackingSession()
-
     }
 
     private fun requestLocationUpdates() {
@@ -136,38 +112,56 @@ class LocationService : Service() {
 
     private fun onNewLocation(location: Location) {
 
-        if (currentLocation != null && location.distanceTo(currentLocation) < 10.0f || (location.hasAccuracy() && location.accuracy > 100)) {
+        if (stateVariables.state_code == null) {
+            return
+        }
+
+        if (!location.hasAccuracy()) {
+            showNotification()
+            sendSession()
+            return
+        }
+
+        if (stateVariables.currentLocation != null && location.distanceTo(stateVariables.currentLocation) < 10.0f) {
+            showNotification()
+            sendSession()
+            return
+        }
+
+        if (location.hasAccuracy() && location.accuracy > 20) {
+            showNotification()
+            sendSession()
             return
         }
 
         Log.i(TAG, "New location: $location")
 
-        if (currentLocation == null) {
-            locationStart = location
+        if (stateVariables.currentLocation == null) {
+            stateVariables.locationStart = location
         } else {
-            line_distance_covered = location.distanceTo(locationStart)
-            overall_distance_covered += location.distanceTo(currentLocation)
+            stateVariables.line_distance_covered = location.distanceTo(stateVariables.locationStart)
+            stateVariables.overall_distance_covered += location.distanceTo(stateVariables.currentLocation)
 
-            if (locationCP == null) {
-                CP_distance_line = -1.0f
+            if (stateVariables.locationCP == null) {
+                stateVariables.CP_distance_line = -1.0f
             } else {
-                CP_distance_line = location.distanceTo(locationCP)
-                CP_distance_overall += location.distanceTo(currentLocation)
+                stateVariables.CP_distance_line = location.distanceTo(stateVariables.locationCP)
+                stateVariables.CP_distance_overall += location.distanceTo(stateVariables.currentLocation)
             }
 
-            if (locationWP == null) {
-                WP_distance_line = -1.0f
+            if (stateVariables.locationWP == null) {
+                stateVariables.WP_distance_line = -1.0f
             } else {
-                WP_distance_line = location.distanceTo(locationWP)
-                WP_distance_overall += location.distanceTo(currentLocation)
+                stateVariables.WP_distance_line = location.distanceTo(stateVariables.locationWP)
+                stateVariables.WP_distance_overall += location.distanceTo(stateVariables.currentLocation)
             }
 
         }
         // save the location for calculations
-        if (currentLocation != null) {
-            oldLocation = Location(currentLocation)
+        if (stateVariables.currentLocation != null) {
+            stateVariables.oldLocation = Location(stateVariables.currentLocation)
         }
-        currentLocation = location
+        stateVariables.currentLocation = location
 
         showNotification()
 
@@ -175,18 +169,19 @@ class LocationService : Service() {
 
         // broadcast new location to UI
         val intent = Intent(C.LOCATION_UPDATE_ACTION)
-        intent.putExtra(C.LOCATION_UPDATE_ACTION_LOCATION_OLD, oldLocation)
-        intent.putExtra(C.LOCATION_UPDATE_ACTION_LOCATION, currentLocation)
+        intent.putExtra(C.LOCATION_UPDATE_ACTION_LOCATION_OLD, stateVariables.oldLocation)
+        intent.putExtra(C.LOCATION_UPDATE_ACTION_LOCATION, stateVariables.currentLocation)
         PendingIntent.getBroadcast(mInstance, 0, intent, Random.nextInt(0, 1000)).send()
 
+        sendSession()
     }
 
     private fun createLocationRequest() {
 
-        mLocationRequest.interval = sync_interval
-        mLocationRequest.fastestInterval = sync_interval / 2
+        mLocationRequest.interval = stateVariables.sync_interval
+        mLocationRequest.fastestInterval = stateVariables.sync_interval / 2
         mLocationRequest.priority = LocationRequest.PRIORITY_HIGH_ACCURACY
-        mLocationRequest.maxWaitTime = sync_interval
+        mLocationRequest.maxWaitTime = stateVariables.sync_interval
     }
 
     private fun getLastLocation() {
@@ -222,22 +217,25 @@ class LocationService : Service() {
             requestJsonParameters,
             Response.Listener { response ->
                 Log.d(TAG, response.toString())
-                state_code = response.getString("id")
+                stateVariables.state_code = response.getString("id")
 
-                saveRestLocation(locationStart!!, API.REST_LOCATION_ID_LOC)
+                saveRestLocation(stateVariables.locationStart!!, API.REST_LOCATION_ID_LOC)
 
                 databaseConnector.addLocation(
                     LocationCategory(
-                        locationStart!!,
+                        stateVariables.locationStart!!,
                         "LOC",
-                        state_code!!
+                        stateVariables.state_code!!
                     )
                 )
 
+                stateVariables.session_start = System.currentTimeMillis()
+
                 val intent = Intent(C.SESSION_START_ACTION)
-                intent.putExtra(C.DISPLAY_SESSION_HASH, state_code)
+                intent.putExtra(C.DISPLAY_SESSION_HASH, stateVariables.state_code)
                 PendingIntent.getBroadcast(this, 0, intent, Random.nextInt(0, 1000)).send()
             },
+
             Response.ErrorListener { _ ->
                 // broadcast start to UI
                 val intent = Intent(C.SESSION_START_FAILED)
@@ -266,7 +264,7 @@ class LocationService : Service() {
     }
 
     fun saveRestLocation(location: Location, location_type: String) {
-        if (token == null || state_code == null) {
+        if (token == null || stateVariables.state_code == null) {
             return
         }
 
@@ -274,7 +272,7 @@ class LocationService : Service() {
             LocationCategory(
                 location,
                 "LOC",
-                state_code!!
+                stateVariables.state_code!!
             )
         )
 
@@ -290,7 +288,7 @@ class LocationService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             requestJsonParameters.put("verticalAccuracy", location.verticalAccuracyMeters)
         }
-        requestJsonParameters.put("gpsSessionId", state_code)
+        requestJsonParameters.put("gpsSessionId", stateVariables.state_code)
         requestJsonParameters.put("gpsLocationTypeId", location_type)
 
 
@@ -360,7 +358,7 @@ class LocationService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "onStartCommand")
 
-        StateVariables.hardReset()
+        stateVariables.hardReset()
 
         showNotification()
 
@@ -391,33 +389,33 @@ class LocationService : Service() {
         notifyview.setOnClickPendingIntent(R.id.imageButtonCP, pendingIntentCp)
         notifyview.setOnClickPendingIntent(R.id.imageButtonWP, pendingIntentWp)
 
-        overall_average_speed = fillColumn(
+        stateVariables.overall_average_speed = stateVariables.fillColumn(
             notifyview,
-            session_duration,
-            overall_distance_covered,
+            stateVariables.session_duration,
+            stateVariables.overall_distance_covered,
             R.id.col4,
             String.format(
                 "%s:%s:%s",
-                (session_duration.toInt() / 3600).toString().padStart(2, '0'),
-                ((session_duration.toInt() / 60) % 60).toString().padStart(2, '0'),
-                (session_duration.toInt() % 60).toString().padStart(2, '0')
+                (stateVariables.session_duration.toInt() / 3600).toString().padStart(2, '0'),
+                ((stateVariables.session_duration.toInt() / 60) % 60).toString().padStart(2, '0'),
+                (stateVariables.session_duration.toInt() % 60).toString().padStart(2, '0')
             )
         )
 
-        CP_average_speed = fillColumn(
+        stateVariables.CP_average_speed = stateVariables.fillColumn(
             notifyview,
-            session_duration,
-            CP_distance_overall,
+            stateVariables.session_duration,
+            stateVariables.CP_distance_overall,
             R.id.col5,
-            "${((CP_distance_line * 10).toInt().toDouble() / 10)} m"
+            "${((stateVariables.CP_distance_line * 10).toInt().toDouble() / 10)} m"
         )
 
-        WP_average_speed = fillColumn(
+        stateVariables.WP_average_speed = stateVariables.fillColumn(
             notifyview,
-            session_duration,
-            WP_distance_overall,
+            stateVariables.session_duration,
+            stateVariables.WP_distance_overall,
             R.id.col6,
-            "${((WP_distance_line * 10).toInt().toDouble() / 10)} m"
+            "${((stateVariables.WP_distance_line * 10).toInt().toDouble() / 10)} m"
         )
 
         // construct and show notification
@@ -442,62 +440,103 @@ class LocationService : Service() {
             when (intent.action) {
                 C.NOTIFICATION_ACTION_WP -> {
 
-                    locationWP = Location(currentLocation)
+                    stateVariables.locationWP = Location(stateVariables.currentLocation)
 
-                    WP_distance_line = 0f
-                    WP_distance_overall = 0f
+                    stateVariables.WP_distance_line = 0f
+                    stateVariables.WP_distance_overall = 0f
 
                     // broadcast new location to UI
                     val intent = Intent(C.LOCATION_UPDATE_ACTION_WP)
-                    intent.putExtra(C.LOCATION_UPDATE_ACTION_WP, locationWP)
+                    intent.putExtra(C.LOCATION_UPDATE_ACTION_WP, stateVariables.locationWP)
                     PendingIntent.getBroadcast(mInstance, 0, intent, Random.nextInt(0, 1000)).send()
 
-                    saveRestLocation(locationWP!!, API.REST_LOCATION_ID_WP)
+                    saveRestLocation(stateVariables.locationWP!!, API.REST_LOCATION_ID_WP)
 
                     databaseConnector.addLocation(
                         LocationCategory(
-                            locationWP!!,
+                            stateVariables.locationWP!!,
                             "WP",
-                            state_code!!
+                            stateVariables.state_code!!
                         )
                     )
 
-                    showNotification()
-
+                    sendSession()
                 }
                 C.NOTIFICATION_ACTION_CP -> {
 
-                    locationCP = Location(currentLocation)
+                    stateVariables.locationCP = Location(stateVariables.currentLocation)
 
-                    CP_distance_line = 0f
-                    CP_distance_overall = 0f
+                    stateVariables.CP_distance_line = 0f
+                    stateVariables.CP_distance_overall = 0f
 
                     // broadcast new location to UI
                     val intent = Intent(C.LOCATION_UPDATE_ACTION_CP)
-                    intent.putExtra(C.LOCATION_UPDATE_ACTION_CP, locationCP)
+                    intent.putExtra(C.LOCATION_UPDATE_ACTION_CP, stateVariables.locationCP)
                     PendingIntent.getBroadcast(mInstance, 0, intent, Random.nextInt(0, 1000)).send()
 
-                    saveRestLocation(locationCP!!, API.REST_LOCATION_ID_CP)
+                    saveRestLocation(stateVariables.locationCP!!, API.REST_LOCATION_ID_CP)
 
                     databaseConnector.addLocation(
                         LocationCategory(
-                            locationCP!!,
+                            stateVariables.locationCP!!,
                             "CP",
-                            state_code!!
+                            stateVariables.state_code!!
                         )
                     )
 
-                    showNotification()
-
+                    sendSession()
                 }
 
                 C.SESSION_TOKEN -> {
 
-                    token = intent.extras?.get(C.SESSION_TOKEN).toString()
+                    token = intent.getStringExtra(C.SESSION_TOKEN)
+                    stateVariables.currentLocation =
+                        intent.extras?.get(C.LOCATION_UPDATE_ACTION) as Location
+                    stateVariables.locationStart =
+                        intent.extras?.get(C.LOCATION_UPDATE_ACTION) as Location
+                    stateVariables.sync_interval = intent.getLongExtra(C.INTERVAL, 5000)
 
+                    getLastLocation()
+                    createLocationRequest()
+                    requestLocationUpdates()
+                    startRestTrackingSession()
+
+                }
+
+                C.FETCH_SESSION -> {
+                    sendSession()
                 }
             }
         }
     }
 
+    private fun sendSession() {
+        stateVariables.session_duration =
+            if (stateVariables.session_start == 0L) 0 else (System.currentTimeMillis() - stateVariables.session_start) / 1000
+        val intent = Intent(C.RESPOND_SESSION)
+        intent.putExtra("state_code", stateVariables.state_code)
+        intent.putExtra("currentLocation", stateVariables.currentLocation)
+        intent.putExtra("overall_distance_covered", stateVariables.overall_distance_covered)
+        intent.putExtra("line_distance_covered", stateVariables.line_distance_covered)
+        intent.putExtra("session_start", stateVariables.session_start)
+        intent.putExtra("session_duration", stateVariables.session_duration)
+        intent.putExtra("overall_average_speed", stateVariables.overall_average_speed)
+        intent.putExtra("CP_distance_overall", stateVariables.CP_distance_overall)
+        intent.putExtra("CP_distance_line", stateVariables.CP_distance_line)
+        intent.putExtra("CP_average_speed", stateVariables.CP_average_speed)
+        intent.putExtra("WP_distance_overall", stateVariables.WP_distance_overall)
+        intent.putExtra("WP_distance_line", stateVariables.WP_distance_line)
+        intent.putExtra("WP_average_speed", stateVariables.WP_average_speed)
+        intent.putExtra("oldLocation", stateVariables.oldLocation)
+        intent.putExtra("currentLocation", stateVariables.currentLocation)
+        intent.putExtra("locationStart", stateVariables.locationStart)
+        intent.putExtra("locationCP", stateVariables.locationCP)
+        intent.putExtra("locationWP", stateVariables.locationWP)
+
+        PendingIntent.getBroadcast(
+            mInstance, 0, intent, Random.nextInt(0, 1000)
+        ).send()
+
+        showNotification()
+    }
 }

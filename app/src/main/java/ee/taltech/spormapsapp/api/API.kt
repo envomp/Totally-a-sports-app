@@ -19,7 +19,7 @@ object API {
     const val REST_LOCATION_ID_CP = "00000000-0000-0000-0000-000000000003"
 
     var token: String? = null
-    val JSON: MediaType = MediaType.parse("application/json; charset=utf-8")!!
+    private val JSON: MediaType = MediaType.parse("application/json; charset=utf-8")!!
 
     private val client = OkHttpClient()
 

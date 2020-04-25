@@ -5,11 +5,11 @@ import android.widget.RemoteViews
 import kotlin.math.roundToInt
 import kotlin.random.Random
 
-object StateVariables {
+class StateVariables {
 
     var stateUID = 215761238 // helps to handle the state
     var state_code: String? = null // backend state
-    var sync_interval: Long = 2000
+    var sync_interval: Long = 5000
 
     // COL 1
     var overall_distance_covered = 0f // meters
@@ -41,7 +41,7 @@ object StateVariables {
     fun hardReset() {
         stateUID = Random.nextInt()
         state_code = null
-        sync_interval = 2000L
+        sync_interval = 5000L
         overall_distance_covered = 0f
         line_distance_covered = 0f
         session_start = 0L
