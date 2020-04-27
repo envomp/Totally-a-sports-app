@@ -2,6 +2,7 @@ package ee.taltech.spormapsapp.helper
 
 import android.location.Location
 import android.widget.RemoteViews
+import java.text.DecimalFormat
 import kotlin.math.roundToInt
 import kotlin.random.Random
 
@@ -95,12 +96,54 @@ class StateVariables {
             averageSpeed.toString()
         }
 
+        var new_covered = ""
+
+        var i = 0
+        for (char in covered.toString().reversed()) {
+            new_covered = if (i % 3 != 0) {
+                "$char$new_covered"
+            } else {
+                "$char $new_covered"
+            }
+            i++
+        }
+
         val text = String.format(
             "%s\n%s\n%s",
-            "$covered m",
+            "$new_covered m",
             row2,
-            "$speedText m/km"
+            "$speedText min/km"
         )
         return Pair(averageSpeed, text)
+    }
+
+    fun update(location: Location) {
+
+        if (currentLocation == null) {
+            locationStart = location
+        } else {
+            line_distance_covered = location.distanceTo(locationStart)
+            overall_distance_covered += location.distanceTo(currentLocation)
+
+            if (locationCP == null) {
+                CP_distance_line = -1.0f
+            } else {
+                CP_distance_line = location.distanceTo(locationCP)
+                CP_distance_overall += location.distanceTo(currentLocation)
+            }
+
+            if (locationWP == null) {
+                WP_distance_line = -1.0f
+            } else {
+                WP_distance_line = location.distanceTo(locationWP)
+                WP_distance_overall += location.distanceTo(currentLocation)
+            }
+        }
+
+        // save the location for calculations
+        if (currentLocation != null) {
+            oldLocation = Location(currentLocation)
+        }
+        currentLocation = location
     }
 }

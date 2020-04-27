@@ -228,7 +228,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                 )
             )
                 .title("Way point")
-                .icon(vectorToBitmap(R.drawable.waypoint, 100, 150))
+                .icon(vectorToBitmap(R.drawable.wp_big, 128, 128))
         )
     }
 
@@ -251,7 +251,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                     )
                 )
                     .title(String.format("Capture point nr. " + (CP.size + 1)))
-                    .icon(vectorToBitmap(R.drawable.capturepoint, 100, 150))
+                    .icon(vectorToBitmap(R.drawable.cp_big, 128, 128))
             )
         )
     }
@@ -561,8 +561,6 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
 
         stopService(Intent(this, LocationService::class.java))
 
-        stateVariables.hardReset()
-        updateVisibleText()
         setColorsAndTexts()
 
     }
@@ -594,9 +592,13 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                 (used_location.distanceTo(new_location)) / ((new_location.time - used_location.time).toDouble() / 1000)
         }
 
-        color = 1 - (kotlin.math.max(kotlin.math.min(color, maxGradient), minGradient) / (maxGradient - minGradient))
+        color = (kotlin.math.max(
+            kotlin.math.min(color, maxGradient),
+            minGradient
+        ) / (maxGradient - minGradient))
 
-        return (0xff000000 + (color * 255).toInt() * 16.0.pow(4.0).toInt()).toInt()
+        return (0xff000000 + (color * 255).toInt() * 16.0.pow(4.0)
+            .toInt() + (255 - color * 255).toInt() * 16.0.pow(2.0).toInt()).toInt()
     }
 
     private fun setColorsAndTexts() {
@@ -659,14 +661,14 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
             stateVariables.session_duration,
             stateVariables.CP_distance_overall,
             R.id.col2,
-            "${((stateVariables.CP_distance_line * 10).toInt().toDouble() / 10)} m"
+            "${((stateVariables.CP_distance_line).toInt())} m"
         )
 
         fillColumn(
             stateVariables.session_duration,
             stateVariables.WP_distance_overall,
             R.id.col3,
-            "${((stateVariables.WP_distance_line * 10).toInt().toDouble() / 10)} m"
+            "${((stateVariables.WP_distance_line).toInt())} m"
         )
 
     }
@@ -853,7 +855,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                     )
                 )
                     .title("Starting point")
-                    .icon(vectorToBitmap(R.drawable.startingpoint, 100, 150))
+                    .icon(vectorToBitmap(R.drawable.sp_big, 128, 128))
             )
         }
     }
@@ -1237,6 +1239,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
 
     private fun drawSession(hash: String) {
         map.clear()
+        stateVariables.hardReset()
         CP = mutableListOf()
         WP = null
         SP = null
@@ -1258,12 +1261,16 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
 
             if (lastLocation != null) {
                 polylines.add(location)
+                stateVariables.session_duration = (location.time.toLong() - stateVariables.session_start) / 1000
 
             } else {
                 stateVariables.locationStart = location.getLocation()
                 addStartingPointMarker()
                 polylines.add(location)
+                stateVariables.session_start = location.time.toLong()
             }
+
+            stateVariables.update(location.getLocation())
 
             lastLocation = location.getLocation()
 
@@ -1283,6 +1290,9 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
             }
             last = location
         }
+
+        setColorsAndTexts()
+        updateVisibleText()
 
     }
 

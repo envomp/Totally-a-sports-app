@@ -136,32 +136,7 @@ class LocationService : Service() {
 
         Log.i(TAG, "New location: $location")
 
-        if (stateVariables.currentLocation == null) {
-            stateVariables.locationStart = location
-        } else {
-            stateVariables.line_distance_covered = location.distanceTo(stateVariables.locationStart)
-            stateVariables.overall_distance_covered += location.distanceTo(stateVariables.currentLocation)
-
-            if (stateVariables.locationCP == null) {
-                stateVariables.CP_distance_line = -1.0f
-            } else {
-                stateVariables.CP_distance_line = location.distanceTo(stateVariables.locationCP)
-                stateVariables.CP_distance_overall += location.distanceTo(stateVariables.currentLocation)
-            }
-
-            if (stateVariables.locationWP == null) {
-                stateVariables.WP_distance_line = -1.0f
-            } else {
-                stateVariables.WP_distance_line = location.distanceTo(stateVariables.locationWP)
-                stateVariables.WP_distance_overall += location.distanceTo(stateVariables.currentLocation)
-            }
-
-        }
-        // save the location for calculations
-        if (stateVariables.currentLocation != null) {
-            stateVariables.oldLocation = Location(stateVariables.currentLocation)
-        }
-        stateVariables.currentLocation = location
+        stateVariables.update(location)
 
         showNotification()
 
