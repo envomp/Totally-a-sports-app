@@ -175,7 +175,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                             drawSession(stateVariables.state_code!!)
                             startGameLoop()
                         },
-                        100
+                        300
                     )
                 }
             }
