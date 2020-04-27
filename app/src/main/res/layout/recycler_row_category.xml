@@ -7,12 +7,13 @@
 
     <TextView
         android:id="@+id/categoryHash"
-        android:layout_width="168dp"
+        android:layout_width="200dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="4dp"
         android:layout_marginTop="16dp"
         android:layout_marginEnd="4dp"
         android:text="Hash"
+        android:textAlignment="center"
         app:layout_constraintBottom_toTopOf="@+id/categoryLocations"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.5"
@@ -22,11 +23,12 @@
 
     <TextView
         android:id="@+id/categoryLocations"
-        android:layout_width="168dp"
+        android:layout_width="200dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="4dp"
         android:layout_marginEnd="4dp"
         android:text="Locations: 123"
+        android:textAlignment="center"
         app:layout_constraintBottom_toTopOf="@+id/categoryDate"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.5"
@@ -35,12 +37,13 @@
 
     <TextView
         android:id="@+id/categoryDate"
-        android:layout_width="168dp"
+        android:layout_width="200dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="4dp"
         android:layout_marginEnd="4dp"
         android:layout_marginBottom="8dp"
         android:text="12.123.1231 12:13:41"
+        android:textAlignment="center"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.5"
@@ -49,23 +52,22 @@
 
     <Button
         android:id="@+id/delete_session"
-        android:layout_width="45dp"
+        android:layout_width="58dp"
         android:layout_height="wrap_content"
-        android:drawableStart="@drawable/ic_delete_forever_black_24dp"
+        android:drawableStart="@drawable/wrap"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toStartOf="@+id/rename_session"
-        app:layout_constraintHorizontal_bias="0.5"
         app:layout_constraintHorizontal_chainStyle="packed"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/categoryDate" />
 
     <Button
         android:id="@+id/rename_session"
-        android:layout_width="45dp"
+        android:layout_width="58dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="16dp"
         android:layout_marginEnd="16dp"
-        android:drawableStart="@drawable/baseline_filter_vintage_black_24"
+        android:drawableStart="@drawable/candy"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toStartOf="@+id/display_session"
         app:layout_constraintHorizontal_bias="0.5"
@@ -75,9 +77,9 @@
 
     <Button
         android:id="@+id/display_session"
-        android:layout_width="45dp"
+        android:layout_width="58dp"
         android:layout_height="wrap_content"
-        android:drawableStart="@drawable/baseline_navigation_black_24"
+        android:drawableStart="@drawable/burger"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.5"

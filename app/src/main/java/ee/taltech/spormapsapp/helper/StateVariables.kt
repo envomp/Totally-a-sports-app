@@ -1,8 +1,9 @@
 package ee.taltech.spormapsapp.helper
 
+import android.content.res.Configuration
+import android.content.res.Resources
 import android.location.Location
 import android.widget.RemoteViews
-import java.text.DecimalFormat
 import kotlin.math.roundToInt
 import kotlin.random.Random
 
@@ -66,10 +67,16 @@ class StateVariables {
         sessionDuration: Long,
         overallDistanceCovered: Float,
         col: Int,
-        row2: String
+        row2: String,
+        resources: Resources
     ): Int {
 
-        val (averageSpeed, text) = getColumnText(sessionDuration, overallDistanceCovered, row2)
+        val (averageSpeed, text) = getColumnText(
+            sessionDuration,
+            overallDistanceCovered,
+            row2,
+            resources
+        )
 
         notifyview.setTextViewText(col, text)
 
@@ -79,7 +86,8 @@ class StateVariables {
     fun getColumnText(
         sessionDuration: Long,
         overallDistanceCovered: Float,
-        row2: String
+        row2: String,
+        resources: Resources
     ): Pair<Int, String> {
         val duration = sessionDuration.toInt()
         val covered = overallDistanceCovered.toInt()
@@ -110,9 +118,13 @@ class StateVariables {
 
         val text = String.format(
             "%s\n%s\n%s",
-            "$new_covered m",
+            "${new_covered}m",
             row2,
-            "$speedText min/km"
+            "$speedText${if (resources.getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
+                " "
+            } else {
+                "\n"
+            }}min/km"
         )
         return Pair(averageSpeed, text)
     }
@@ -126,14 +138,14 @@ class StateVariables {
             overall_distance_covered += location.distanceTo(currentLocation)
 
             if (locationCP == null) {
-                CP_distance_line = -1.0f
+                CP_distance_line = 0f
             } else {
                 CP_distance_line = location.distanceTo(locationCP)
                 CP_distance_overall += location.distanceTo(currentLocation)
             }
 
             if (locationWP == null) {
-                WP_distance_line = -1.0f
+                WP_distance_line = 0f
             } else {
                 WP_distance_line = location.distanceTo(locationWP)
                 WP_distance_overall += location.distanceTo(currentLocation)

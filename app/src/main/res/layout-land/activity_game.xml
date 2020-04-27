@@ -23,7 +23,7 @@
     <include
         android:id="@+id/options_drawer"
         layout="@layout/options"
-        android:layout_width="184dp"
+        android:layout_width="240dp"
         android:layout_height="0dp"
         android:layout_marginStart="8dp"
         android:visibility="gone"
@@ -61,15 +61,17 @@
 
     <ImageView
         android:id="@+id/imageViewCompass"
-        android:layout_width="200dp"
-        android:layout_height="200dp"
+        android:layout_width="240dp"
+        android:layout_height="240dp"
         android:layout_centerHorizontal="true"
         android:layout_centerVertical="true"
+        android:layout_marginStart="8dp"
+        android:layout_marginBottom="8dp"
         android:adjustViewBounds="true"
-        android:visibility="gone"
         android:contentDescription="Compass"
         android:scaleType="fitXY"
-        android:src="@drawable/ic_compass"
+        android:src="@drawable/chicken"
+        android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="@+id/game_map"
         app:layout_constraintStart_toStartOf="@+id/game_map" />
 

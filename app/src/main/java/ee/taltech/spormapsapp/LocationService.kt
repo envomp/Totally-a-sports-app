@@ -374,7 +374,8 @@ class LocationService : Service() {
                 (stateVariables.session_duration.toInt() / 3600).toString().padStart(2, '0'),
                 ((stateVariables.session_duration.toInt() / 60) % 60).toString().padStart(2, '0'),
                 (stateVariables.session_duration.toInt() % 60).toString().padStart(2, '0')
-            )
+            ),
+            resources
         )
 
         stateVariables.CP_average_speed = stateVariables.fillColumn(
@@ -382,7 +383,8 @@ class LocationService : Service() {
             stateVariables.session_duration,
             stateVariables.CP_distance_overall,
             R.id.col5,
-            "${((stateVariables.CP_distance_line * 10).toInt().toDouble() / 10)} m"
+            "${((stateVariables.CP_distance_line * 10).toInt().toDouble() / 10)} m",
+            resources
         )
 
         stateVariables.WP_average_speed = stateVariables.fillColumn(
@@ -390,7 +392,8 @@ class LocationService : Service() {
             stateVariables.session_duration,
             stateVariables.WP_distance_overall,
             R.id.col6,
-            "${((stateVariables.WP_distance_line * 10).toInt().toDouble() / 10)} m"
+            "${((stateVariables.WP_distance_line * 10).toInt().toDouble() / 10)} m",
+            resources
         )
 
         // construct and show notification

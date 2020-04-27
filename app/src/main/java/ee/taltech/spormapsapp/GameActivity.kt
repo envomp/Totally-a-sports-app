@@ -57,7 +57,6 @@ import ee.taltech.spormapsapp.helper.Utils
 import kotlinx.android.synthetic.main.map.*
 import kotlinx.android.synthetic.main.options.*
 import java.io.File
-import java.io.FileReader
 import java.io.FileWriter
 import java.lang.Math.*
 import kotlin.math.pow
@@ -461,8 +460,8 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
             }
         }
 
-        findViewById<Button>(R.id.add_wp).setBackgroundColor(resources.getColor(R.color.colorGreen))
-        findViewById<Button>(R.id.add_wp).setOnClickListener {
+        findViewById<ImageButton>(R.id.add_wp).setBackgroundColor(resources.getColor(R.color.colorGreen))
+        findViewById<ImageButton>(R.id.add_wp).setOnClickListener {
 
             if (started && stateVariables.currentLocation != null) {
                 val location = Location(stateVariables.currentLocation)
@@ -480,8 +479,8 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
 
         }
 
-        findViewById<Button>(R.id.add_cp).setBackgroundColor(resources.getColor(R.color.colorGreen))
-        findViewById<Button>(R.id.add_cp).setOnClickListener {
+        findViewById<ImageButton>(R.id.add_cp).setBackgroundColor(resources.getColor(R.color.colorGreen))
+        findViewById<ImageButton>(R.id.add_cp).setOnClickListener {
 
             if (started && stateVariables.currentLocation != null) {
                 stateVariables.locationCP = Location(stateVariables.currentLocation)
@@ -612,8 +611,8 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
             }
         findViewById<Button>(R.id.position).text = directionMap[direction]
         findViewById<Button>(R.id.start_or_stop).setBackgroundColor(resources.getColor(if (started) R.color.colorGreener else R.color.colorGreen))
-        findViewById<Button>(R.id.add_wp).setBackgroundColor(resources.getColor(R.color.colorGreen))
-        findViewById<Button>(R.id.add_cp).setBackgroundColor(resources.getColor(R.color.colorGreen))
+        findViewById<ImageButton>(R.id.add_wp).setBackgroundColor(resources.getColor(R.color.colorGreen))
+        findViewById<ImageButton>(R.id.add_cp).setBackgroundColor(resources.getColor(R.color.colorGreen))
         findViewById<Button>(R.id.options).setBackgroundColor(resources.getColor(if (isOptionsToggled) R.color.colorGreener else R.color.colorGreen))
         findViewById<Button>(R.id.compass).setBackgroundColor(resources.getColor(if (isCompassToggled) R.color.colorGreener else R.color.colorGreen))
 
@@ -683,7 +682,8 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
         val (averageSpeed, text) = stateVariables.getColumnText(
             sessionDuration,
             overallDistanceCovered,
-            row2
+            row2,
+            resources
         )
 
         findViewById<TextView>(col).text = text
@@ -855,7 +855,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                     )
                 )
                     .title("Starting point")
-                    .icon(vectorToBitmap(R.drawable.sp_big, 128, 128))
+                    .icon(vectorToBitmap(R.drawable.sp, 128, 128))
             )
         }
     }

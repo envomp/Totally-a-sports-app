@@ -5,14 +5,15 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <Button
+    <ImageButton
         android:id="@+id/add_wp"
         android:layout_width="56dp"
         android:layout_height="56dp"
         android:layout_marginTop="4dp"
         android:layout_marginBottom="4dp"
-        android:drawableStart="@drawable/wp"
-        android:text="WP"
+        android:src="@drawable/wp"
+        android:textAlignment="center"
+        android:fontFamily="monospace"
         android:paddingStart="4dp"
         android:textSize="12dp"
         app:layout_constraintBottom_toBottomOf="parent"
@@ -29,7 +30,8 @@
         android:layout_marginTop="4dp"
         android:layout_marginEnd="4dp"
         android:layout_marginBottom="4dp"
-        android:text="COL2"
+        android:text="COL3"
+        android:fontFamily="monospace"
         android:textAlignment="viewEnd"
         android:textSize="12sp"
         app:layout_constraintBottom_toBottomOf="parent"
@@ -47,6 +49,7 @@
         android:layout_marginEnd="4dp"
         android:layout_marginBottom="4dp"
         android:text="COL2"
+        android:fontFamily="monospace"
         android:textAlignment="viewEnd"
         android:textSize="12sp"
         app:layout_constraintBottom_toBottomOf="parent"
@@ -55,14 +58,15 @@
         app:layout_constraintStart_toEndOf="@+id/add_cp"
         app:layout_constraintTop_toTopOf="parent" />
 
-    <Button
+    <ImageButton
         android:id="@+id/add_cp"
         android:layout_width="56dp"
         android:layout_height="56dp"
         android:layout_marginTop="4dp"
         android:layout_marginBottom="4dp"
-        android:drawableStart="@drawable/cp"
-        android:text="CP"
+        android:src="@drawable/cp"
+        android:textAlignment="center"
+        android:fontFamily="monospace"
         android:paddingStart="4dp"
         android:textSize="12sp"
         app:layout_constraintBottom_toBottomOf="parent"
@@ -79,6 +83,8 @@
         android:layout_marginTop="4dp"
         android:layout_marginBottom="4dp"
         android:text="Start"
+        android:textAlignment="center"
+        android:fontFamily="monospace"
         android:textSize="12dp"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toStartOf="@+id/col1"
@@ -119,6 +125,7 @@
         android:layout_marginEnd="4dp"
         android:layout_marginBottom="4dp"
         android:text="COL1"
+        android:fontFamily="monospace"
         android:textAlignment="viewEnd"
         android:textSize="12sp"
         app:layout_constraintBottom_toBottomOf="parent"

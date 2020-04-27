@@ -9,9 +9,11 @@
         android:id="@+id/position"
         android:layout_width="200dp"
         android:layout_height="0dp"
-        android:drawableStart="@drawable/ic_gps_fixed_black_24dp"
+        android:drawableStart="@drawable/donut_2"
         android:paddingStart="16dp"
-        android:text="north-up"
+        android:text="CENTERED"
+        android:textAlignment="center"
+        android:fontFamily="monospace"
         android:visibility="gone"
         app:layout_constraintBottom_toTopOf="@+id/compass"
         app:layout_constraintStart_toStartOf="parent"
@@ -19,22 +21,26 @@
 
     <Button
         android:id="@+id/compass"
-        android:layout_width="200dp"
+        android:layout_width="256dp"
         android:layout_height="0dp"
-        android:drawableStart="@drawable/compass"
+        android:drawableStart="@drawable/donut_1"
         android:paddingStart="16dp"
         android:text="compass"
+        android:textAlignment="center"
+        android:fontFamily="monospace"
         app:layout_constraintBottom_toTopOf="@+id/options"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/position" />
 
     <Button
         android:id="@+id/options"
-        android:layout_width="200dp"
+        android:layout_width="256dp"
         android:layout_height="0dp"
-        android:drawableStart="@drawable/ic_settings_black_24dp"
+        android:drawableStart="@drawable/donut_3"
         android:paddingStart="16dp"
         android:text="Options"
+        android:textAlignment="center"
+        android:fontFamily="monospace"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/compass" />
 
