@@ -59,7 +59,6 @@ import kotlinx.android.synthetic.main.options.*
 import java.io.File
 import java.io.FileWriter
 import java.lang.Math.*
-import kotlin.math.pow
 import kotlin.random.Random.Default.nextInt
 
 
@@ -172,7 +171,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
 
                     Handler().postDelayed(
                         {
-                            drawSession(stateVariables.state_code!!)
+//                            drawSession(stateVariables.state_code!!)
                             startGameLoop()
                         },
                         300
@@ -219,6 +218,8 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
     }
 
     private fun GoogleMap.addWayPointMarker() {
+        Log.d(TAG, "Added WP Marker")
+
         WP = addMarker(
             MarkerOptions().position(
                 LatLng(
@@ -241,6 +242,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
     }
 
     private fun GoogleMap.addCheckPointMarker() {
+        Log.d(TAG, "Added CP Marker")
         CP.add(
             addMarker(
                 MarkerOptions().position(
@@ -591,13 +593,13 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                 (used_location.distanceTo(new_location)) / ((new_location.time - used_location.time).toDouble() / 1000)
         }
 
-        color = (kotlin.math.max(
-            kotlin.math.min(color, maxGradient),
-            minGradient
-        ) / (maxGradient - minGradient))
+        var newColor = (kotlin.math.max(
+            kotlin.math.min((color * 256).toInt(), maxGradient.toInt()),
+            minGradient.toInt()
+        ) / (maxGradient.toInt() - minGradient.toInt()))
 
-        return (0xff000000 + (color * 255).toInt() * 16.0.pow(4.0)
-            .toInt() + (255 - color * 255).toInt() * 16.0.pow(2.0).toInt()).toInt()
+        println(newColor)
+        return (0xff000000 + (newColor * 255) * 256 + (255 - newColor * 255)).toInt()
     }
 
     private fun setColorsAndTexts() {
@@ -683,7 +685,8 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
             sessionDuration,
             overallDistanceCovered,
             row2,
-            resources
+            resources,
+            false
         )
 
         findViewById<TextView>(col).text = text
@@ -846,6 +849,8 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
     }
 
     private fun addStartingPointMarker() {
+        Log.d(TAG, "Added SP Marker")
+
         if (stateVariables.locationStart != null) {
             SP = map.addMarker(
                 MarkerOptions().position(
@@ -1227,6 +1232,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
         started = true
         hasPermissions = true
 
+        Log.d(TAG, "start game loop with state code: $stateVariables.state_code")
         if (stateVariables.state_code != null) {
             drawSession(stateVariables.state_code!!)
         } else {
@@ -1248,7 +1254,6 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
         var lastLocation: Location? = null
 
         for (location in databaseConnector.getAllSessionLocations(hash)) {
-
             if (location.marker_type == "CP") {
                 stateVariables.locationCP = location.getLocation()
                 map.addCheckPointMarker()
@@ -1261,7 +1266,8 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
 
             if (lastLocation != null) {
                 polylines.add(location)
-                stateVariables.session_duration = (location.time.toLong() - stateVariables.session_start) / 1000
+                stateVariables.session_duration =
+                    (location.time.toLong() - stateVariables.session_start) / 1000
 
             } else {
                 stateVariables.locationStart = location.getLocation()
@@ -1280,7 +1286,7 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
         for (location in polylines) {
             if (last != null) {
                 val color = getTrackColor(last.getLocation(), location.getLocation())
-
+                Log.d(TAG, "Added polyline")
                 map.addPolyline(
                     PolylineOptions().add(
                         LatLng(last.latitude, last.longitude),

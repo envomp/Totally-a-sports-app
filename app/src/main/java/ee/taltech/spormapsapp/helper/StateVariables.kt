@@ -75,7 +75,8 @@ class StateVariables {
             sessionDuration,
             overallDistanceCovered,
             row2,
-            resources
+            resources,
+            true
         )
 
         notifyview.setTextViewText(col, text)
@@ -87,7 +88,8 @@ class StateVariables {
         sessionDuration: Long,
         overallDistanceCovered: Float,
         row2: String,
-        resources: Resources
+        resources: Resources,
+        hasCapLines: Boolean
     ): Pair<Int, String> {
         val duration = sessionDuration.toInt()
         val covered = overallDistanceCovered.toInt()
@@ -95,8 +97,6 @@ class StateVariables {
         if (covered != 0) {
             averageSpeed = ((duration / 60) / (overallDistanceCovered / 1000)).roundToInt()
         }
-
-        println(averageSpeed)
 
         val speedText = if (averageSpeed < 1 || averageSpeed > 99) {
             "--:--"
@@ -120,7 +120,7 @@ class StateVariables {
             "%s\n%s\n%s",
             "${new_covered}m",
             row2,
-            "$speedText${if (resources.getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE) {
+            "$speedText${if (resources.getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE || hasCapLines) {
                 " "
             } else {
                 "\n"
