@@ -593,13 +593,13 @@ class GameActivity : AppCompatActivity(), SensorEventListener {
                 (used_location.distanceTo(new_location)) / ((new_location.time - used_location.time).toDouble() / 1000)
         }
 
-        var newColor = (kotlin.math.max(
-            kotlin.math.min((color * 256).toInt(), maxGradient.toInt()),
-            minGradient.toInt()
-        ) / (maxGradient.toInt() - minGradient.toInt()))
+        var newColor: Double =
+            kotlin.math.max(
+                kotlin.math.min(color, maxGradient),
+                minGradient
+            ) / maxGradient
 
-        println(newColor)
-        return (0xff000000 + (newColor * 255) * 256 + (255 - newColor * 255)).toInt()
+        return (0xff000000 + (newColor * 255).toInt() * 256 * 256 + (255 - (newColor * 255).toInt() * 256)).toInt()
     }
 
     private fun setColorsAndTexts() {
